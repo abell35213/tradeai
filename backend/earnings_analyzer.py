@@ -64,6 +64,7 @@ class EarningsAnalyzer:
         Generate the Pre-Earnings Sentiment Snapshot for a symbol.
         Scores four dimensions: Expectation Density, Options Market Expectations,
         Positioning & Flow, and Narrative Alignment.
+        Then classifies the earnings setup into one of five buckets (A–E).
         """
         ticker = yf.Ticker(symbol)
         info = ticker.info
@@ -72,6 +73,9 @@ class EarningsAnalyzer:
         options_mkt = self._analyze_options_expectations(ticker, info)
         positioning = self._analyze_positioning_flow(ticker, info)
         narrative = self._analyze_narrative_alignment(ticker, info)
+        setup = self.classify_earnings_setup(
+            expectation, options_mkt, positioning, narrative
+        )
 
         return {
             'symbol': symbol,
@@ -81,6 +85,7 @@ class EarningsAnalyzer:
             'options_expectations': options_mkt,
             'positioning_flow': positioning,
             'narrative_alignment': narrative,
+            'earnings_setup': setup,
             'timestamp': datetime.now().isoformat(),
         }
 
@@ -300,4 +305,189 @@ class EarningsAnalyzer:
             'price_ahead_of_narrative': price_ahead,
             'narrative_ahead_of_price': narrative_ahead,
             'signal': signal,
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 2 – Classify the Earnings Setup (A–E)
+    # ------------------------------------------------------------------
+
+    SETUP_DEFINITIONS = {
+        'A': {
+            'label': 'Overpriced Fear',
+            'interpretation': 'Market is overpaying for disaster.',
+            'preferred_structures': [
+                'Short straddles (selectively)',
+                'Iron condors',
+                'Put spreads financed by call overwrites',
+                'Calendars (front-week short)',
+            ],
+            'best_in': [
+                'S&P 500 names',
+                'Defensive sectors',
+                'Energy majors',
+            ],
+        },
+        'B': {
+            'label': 'Complacent Optimism',
+            'interpretation': 'Market assumes "nothing can go wrong."',
+            'preferred_structures': [
+                'Long puts or put spreads',
+                'Long straddles if IV historically cheap',
+                'Ratio spreads (defined risk)',
+            ],
+            'best_in': [
+                'Mega-cap growth',
+                'Momentum mid-caps',
+            ],
+        },
+        'C': {
+            'label': 'Crowded Bull',
+            'interpretation': 'Even a "beat" may disappoint.',
+            'preferred_structures': [
+                'Call spreads (cap upside)',
+                'Call flies',
+                'Long puts financed with call sales',
+            ],
+            'best_in': [],
+        },
+        'D': {
+            'label': 'Confused / Two-Sided',
+            'interpretation': 'Market expects movement but not direction.',
+            'preferred_structures': [
+                'Long straddles',
+                'Long strangles',
+                'Backspreads',
+            ],
+            'best_in': [
+                'Mid-caps',
+                'Volatile cyclicals',
+                'Energy E&Ps',
+            ],
+        },
+        'E': {
+            'label': 'Neglected / Asymmetric',
+            'interpretation': 'Optionality underpriced.',
+            'preferred_structures': [
+                'Long calls or puts',
+                'Cheap strangles',
+                'Defined-risk directional bets',
+            ],
+            'best_in': [],
+        },
+    }
+
+    def classify_earnings_setup(self, expectation, options_mkt, positioning, narrative):
+        """
+        Score each of the five setups (A–E) against the snapshot dimensions
+        and return the best-matching setup with its metadata and matched traits.
+        """
+        scores = {}
+        traits = {}
+
+        iv_ratio = options_mkt.get('iv_vs_historical')
+        pc_ratio = positioning.get('put_call_oi_ratio')
+        drift_dir = positioning.get('drift_direction')
+        drift_pct = positioning.get('price_drift_pct')
+        consensus_tight = expectation.get('consensus_tight')
+        spread_pct = expectation.get('spread_pct')
+        analyst_count = expectation.get('analyst_count') or 0
+        call_oi = positioning.get('call_oi') or 0
+        put_oi = positioning.get('put_oi') or 0
+        total_oi = call_oi + put_oi
+        atm_iv = options_mkt.get('atm_iv')
+        themes = narrative.get('themes') or []
+
+        # --- Setup A: Overpriced Fear ---
+        a_score = 0
+        a_traits = []
+        if iv_ratio is not None and iv_ratio > 1.2:
+            a_score += 3
+            a_traits.append('IV very high vs history')
+        if pc_ratio is not None and pc_ratio > 1.0:
+            a_score += 2
+            a_traits.append('Heavy downside skew')
+        if drift_dir in ('flat', 'downward'):
+            a_score += 1
+            a_traits.append('Flat or mildly weak price action')
+        scores['A'] = a_score
+        traits['A'] = a_traits
+
+        # --- Setup B: Complacent Optimism ---
+        b_score = 0
+        b_traits = []
+        if iv_ratio is not None and iv_ratio < 0.9:
+            b_score += 3
+            b_traits.append('IV cheap vs history')
+        if drift_dir == 'upward':
+            b_score += 2
+            b_traits.append('Strong drift higher')
+        if len(themes) > 0 and narrative.get('narrative_ahead_of_price'):
+            b_score += 1
+            b_traits.append('Positive narrative saturation')
+        scores['B'] = b_score
+        traits['B'] = b_traits
+
+        # --- Setup C: Crowded Bull ---
+        c_score = 0
+        c_traits = []
+        if pc_ratio is not None and pc_ratio < 0.7:
+            c_score += 3
+            c_traits.append('Heavy call OI')
+        if drift_dir == 'upward' and drift_pct is not None and drift_pct > 0.03:
+            c_score += 2
+            c_traits.append('Stock up materially pre-earnings')
+        if consensus_tight:
+            c_score += 1
+            c_traits.append('Analysts unanimously positive')
+        scores['C'] = c_score
+        traits['C'] = c_traits
+
+        # --- Setup D: Confused / Two-Sided ---
+        d_score = 0
+        d_traits = []
+        if iv_ratio is not None and iv_ratio > 1.0:
+            d_score += 1
+            d_traits.append('Elevated IV')
+        if pc_ratio is not None and 0.7 <= pc_ratio <= 1.3:
+            d_score += 2
+            d_traits.append('Both call & put buying')
+        if not consensus_tight and spread_pct is not None and spread_pct > 0.30:
+            d_score += 2
+            d_traits.append('Wide estimate dispersion')
+        if drift_dir == 'flat':
+            d_score += 2
+            d_traits.append('No clear drift')
+        scores['D'] = d_score
+        traits['D'] = d_traits
+
+        # --- Setup E: Neglected / Asymmetric ---
+        e_score = 0
+        e_traits = []
+        if atm_iv is not None and atm_iv < 0.25:
+            e_score += 2
+            e_traits.append('Low IV')
+        if total_oi < 50000:
+            e_score += 2
+            e_traits.append('Thin options market')
+        if analyst_count < 10:
+            e_score += 2
+            e_traits.append('Little media coverage')
+        if len(themes) == 0:
+            e_score += 1
+            e_traits.append('No dominant macro theme')
+        scores['E'] = e_score
+        traits['E'] = e_traits
+
+        # Pick highest-scoring setup; ties broken by alphabetical order (A first)
+        best = max(scores, key=lambda k: (scores[k], -ord(k)))
+        defn = self.SETUP_DEFINITIONS[best]
+
+        return {
+            'setup': best,
+            'label': defn['label'],
+            'interpretation': defn['interpretation'],
+            'preferred_structures': defn['preferred_structures'],
+            'best_in': defn['best_in'],
+            'matched_traits': traits[best],
+            'scores': scores,
         }

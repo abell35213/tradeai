@@ -442,3 +442,79 @@
   background: #e8f5e9;
   color: #2e7d32;
 }
+
+/* Earnings Setup Classification Styles */
+.earnings-setup-card {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border-left: 5px solid #2a5298;
+}
+
+.earnings-setup-card.setup-A { border-left-color: #e65100; }
+.earnings-setup-card.setup-B { border-left-color: #2e7d32; }
+.earnings-setup-card.setup-C { border-left-color: #c62828; }
+.earnings-setup-card.setup-D { border-left-color: #6a1b9a; }
+.earnings-setup-card.setup-E { border-left-color: #00695c; }
+
+.earnings-setup-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.earnings-setup-badge {
+  display: inline-block;
+  background: #1e3c72;
+  color: white;
+  font-weight: 700;
+  font-size: 0.95em;
+  padding: 4px 14px;
+  border-radius: 20px;
+}
+
+.setup-A .earnings-setup-badge { background: #e65100; }
+.setup-B .earnings-setup-badge { background: #2e7d32; }
+.setup-C .earnings-setup-badge { background: #c62828; }
+.setup-D .earnings-setup-badge { background: #6a1b9a; }
+.setup-E .earnings-setup-badge { background: #00695c; }
+
+.earnings-setup-label {
+  font-size: 1.2em;
+  font-weight: 700;
+  color: #1e3c72;
+}
+
+.earnings-setup-interpretation {
+  font-size: 0.95em;
+  color: #555;
+  margin: 6px 0 14px 0;
+  font-style: italic;
+}
+
+.earnings-setup-traits,
+.earnings-setup-structures {
+  margin-bottom: 10px;
+}
+
+.earnings-setup-traits ul,
+.earnings-setup-structures ul {
+  margin: 4px 0 0 18px;
+  padding: 0;
+  list-style: disc;
+}
+
+.earnings-setup-traits li,
+.earnings-setup-structures li {
+  font-size: 0.92em;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.earnings-setup-bestin {
+  font-size: 0.9em;
+  color: #555;
+  margin-top: 8px;
+}

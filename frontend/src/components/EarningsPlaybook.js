@@ -165,6 +165,47 @@ function EarningsPlaybook({ apiUrl }) {
                 )}
               </div>
 
+              {snapshot.earnings_setup && (
+                <div className={`earnings-setup-card setup-${snapshot.earnings_setup.setup}`}>
+                  <div className="earnings-setup-header">
+                    <span className="earnings-setup-badge">
+                      Setup {snapshot.earnings_setup.setup}
+                    </span>
+                    <span className="earnings-setup-label">
+                      {snapshot.earnings_setup.label}
+                    </span>
+                  </div>
+                  <p className="earnings-setup-interpretation">
+                    {snapshot.earnings_setup.interpretation}
+                  </p>
+                  {snapshot.earnings_setup.matched_traits && snapshot.earnings_setup.matched_traits.length > 0 && (
+                    <div className="earnings-setup-traits">
+                      <strong>Matched Traits:</strong>
+                      <ul>
+                        {snapshot.earnings_setup.matched_traits.map((t, i) => (
+                          <li key={i}>{t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {snapshot.earnings_setup.preferred_structures && snapshot.earnings_setup.preferred_structures.length > 0 && (
+                    <div className="earnings-setup-structures">
+                      <strong>Preferred Structures:</strong>
+                      <ul>
+                        {snapshot.earnings_setup.preferred_structures.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {snapshot.earnings_setup.best_in && snapshot.earnings_setup.best_in.length > 0 && (
+                    <div className="earnings-setup-bestin">
+                      <strong>Best in:</strong> {snapshot.earnings_setup.best_in.join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="earnings-dimensions-grid">
                 {/* Dimension 1: Expectation Density */}
                 <div className="earnings-dimension-card">
