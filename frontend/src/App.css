@@ -268,3 +268,177 @@
 .tab:hover {
   color: #1e3c72;
 }
+
+/* Earnings Playbook Styles */
+.earnings-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.earnings-nav-btn {
+  width: auto;
+  padding: 8px 16px;
+}
+
+.earnings-month-title {
+  font-size: 1.4em;
+  color: #1e3c72;
+  margin: 0;
+  min-width: 200px;
+  text-align: center;
+}
+
+.earnings-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  background: #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.earnings-calendar-header {
+  background: #1e3c72;
+  color: white;
+  text-align: center;
+  padding: 10px 4px;
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+.earnings-calendar-cell {
+  background: #fff;
+  min-height: 90px;
+  padding: 6px;
+  position: relative;
+}
+
+.earnings-calendar-cell.empty {
+  background: #f5f5f5;
+}
+
+.earnings-calendar-cell.today {
+  background: #eef4ff;
+  box-shadow: inset 0 0 0 2px #2a5298;
+}
+
+.earnings-calendar-cell.has-earnings {
+  background: #fffde7;
+}
+
+.earnings-day-number {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.earnings-day-companies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.earnings-ticker-btn {
+  background: #2a5298;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.72em;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: background 0.2s;
+}
+
+.earnings-ticker-btn:hover {
+  background: #1e3c72;
+}
+
+.earnings-ticker-btn.selected {
+  background: #e65100;
+}
+
+.earnings-time-badge {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.earnings-snapshot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  font-size: 1.1em;
+}
+
+.earnings-date-badge {
+  background: #fff3e0;
+  color: #e65100;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.earnings-dimensions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 968px) {
+  .earnings-dimensions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.earnings-dimension-card {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px;
+  border-left: 4px solid #2a5298;
+}
+
+.earnings-dimension-card h3 {
+  margin-top: 0;
+  color: #1e3c72;
+  font-size: 1.15em;
+  margin-bottom: 4px;
+}
+
+.earnings-dimension-desc {
+  font-size: 0.88em;
+  color: #888;
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+
+.earnings-signal {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.92em;
+  font-weight: 600;
+}
+
+.earnings-signal-neutral {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.earnings-signal-warning {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.earnings-signal-positive {
+  background: #e8f5e9;
+  color: #2e7d32;
+}

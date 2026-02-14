@@ -15,7 +15,8 @@ import yfinance as yf
 from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
 from opportunity_finder import OpportunityFinder
-from demo_data import get_mock_sentiment, get_mock_market_data, get_mock_risk_metrics
+from earnings_analyzer import EarningsAnalyzer
+from demo_data import get_mock_sentiment, get_mock_market_data, get_mock_risk_metrics, get_mock_earnings_calendar, get_mock_earnings_snapshot
 import os
 
 app = Flask(__name__)
@@ -28,6 +29,7 @@ DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
 sentiment_analyzer = SentimentAnalyzer()
 derivatives_calc = DerivativesCalculator()
 opportunity_finder = OpportunityFinder()
+earnings_analyzer = EarningsAnalyzer()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -210,6 +212,52 @@ def get_risk_metrics(symbol):
             'success': True,
             'symbol': symbol,
             'risk_metrics': metrics,
+            'demo_mode': DEMO_MODE
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/earnings/calendar', methods=['GET'])
+def get_earnings_calendar():
+    """Get earnings calendar for a given month"""
+    try:
+        year = request.args.get('year', datetime.now().year, type=int)
+        month = request.args.get('month', datetime.now().month, type=int)
+
+        if DEMO_MODE:
+            calendar = get_mock_earnings_calendar(year, month)
+        else:
+            calendar = earnings_analyzer.get_earnings_calendar(year, month)
+
+        return jsonify({
+            'success': True,
+            'year': year,
+            'month': month,
+            'calendar': calendar,
+            'demo_mode': DEMO_MODE
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/earnings/snapshot/<symbol>', methods=['GET'])
+def get_earnings_snapshot(symbol):
+    """Get pre-earnings sentiment snapshot for a symbol"""
+    try:
+        if DEMO_MODE:
+            snapshot = get_mock_earnings_snapshot(symbol)
+        else:
+            snapshot = earnings_analyzer.get_earnings_snapshot(symbol)
+
+        return jsonify({
+            'success': True,
+            'symbol': symbol,
+            'snapshot': snapshot,
             'demo_mode': DEMO_MODE
         })
     except Exception as e:

@@ -179,6 +179,244 @@ MOCK_RISK_METRICS = {
     }
 }
 
+def _generate_mock_earnings_calendar(year, month):
+    """Generate a mock earnings calendar for the given month."""
+    from datetime import datetime, timedelta
+    import random
+
+    companies = [
+        {'symbol': 'AAPL', 'name': 'Apple Inc.', 'market_cap': 2650000000000},
+        {'symbol': 'MSFT', 'name': 'Microsoft Corporation', 'market_cap': 2800000000000},
+        {'symbol': 'GOOGL', 'name': 'Alphabet Inc.', 'market_cap': 1750000000000},
+        {'symbol': 'AMZN', 'name': 'Amazon.com Inc.', 'market_cap': 1580000000000},
+        {'symbol': 'NVDA', 'name': 'NVIDIA Corporation', 'market_cap': 1820000000000},
+        {'symbol': 'META', 'name': 'Meta Platforms Inc.', 'market_cap': 920000000000},
+        {'symbol': 'TSLA', 'name': 'Tesla Inc.', 'market_cap': 780000000000},
+        {'symbol': 'JPM', 'name': 'JPMorgan Chase & Co.', 'market_cap': 490000000000},
+        {'symbol': 'V', 'name': 'Visa Inc.', 'market_cap': 520000000000},
+        {'symbol': 'JNJ', 'name': 'Johnson & Johnson', 'market_cap': 410000000000},
+        {'symbol': 'WMT', 'name': 'Walmart Inc.', 'market_cap': 430000000000},
+        {'symbol': 'PG', 'name': 'Procter & Gamble Co.', 'market_cap': 350000000000},
+        {'symbol': 'MA', 'name': 'Mastercard Inc.', 'market_cap': 380000000000},
+        {'symbol': 'HD', 'name': 'The Home Depot Inc.', 'market_cap': 340000000000},
+        {'symbol': 'DIS', 'name': 'The Walt Disney Company', 'market_cap': 195000000000},
+        {'symbol': 'NFLX', 'name': 'Netflix Inc.', 'market_cap': 230000000000},
+        {'symbol': 'ADBE', 'name': 'Adobe Inc.', 'market_cap': 240000000000},
+        {'symbol': 'CRM', 'name': 'Salesforce Inc.', 'market_cap': 210000000000},
+        {'symbol': 'INTC', 'name': 'Intel Corporation', 'market_cap': 180000000000},
+        {'symbol': 'AMD', 'name': 'Advanced Micro Devices', 'market_cap': 220000000000},
+        {'symbol': 'PYPL', 'name': 'PayPal Holdings Inc.', 'market_cap': 68000000000},
+        {'symbol': 'COST', 'name': 'Costco Wholesale Corp.', 'market_cap': 290000000000},
+        {'symbol': 'PEP', 'name': 'PepsiCo Inc.', 'market_cap': 230000000000},
+        {'symbol': 'AVGO', 'name': 'Broadcom Inc.', 'market_cap': 370000000000},
+    ]
+
+    random.seed(year * 100 + month)
+    calendar = {}
+
+    start = datetime(year, month, 1)
+    if month == 12:
+        end = datetime(year + 1, 1, 1)
+    else:
+        end = datetime(year, month + 1, 1)
+
+    business_days = []
+    current = start
+    while current < end:
+        if current.weekday() < 5:
+            business_days.append(current)
+        current += timedelta(days=1)
+
+    shuffled = list(companies)
+    random.shuffle(shuffled)
+
+    for i, company in enumerate(shuffled):
+        day = business_days[i % len(business_days)]
+        date_str = day.strftime('%Y-%m-%d')
+        if date_str not in calendar:
+            calendar[date_str] = []
+        calendar[date_str].append({
+            'symbol': company['symbol'],
+            'name': company['name'],
+            'time': 'BMO' if random.random() > 0.5 else 'AMC',
+            'market_cap': company['market_cap'],
+        })
+
+    return calendar
+
+
+MOCK_EARNINGS_SNAPSHOTS = {
+    'AAPL': {
+        'symbol': 'AAPL',
+        'name': 'Apple Inc.',
+        'earnings_date': '2026-02-26',
+        'expectation_density': {
+            'analyst_count': 38,
+            'target_mean': 195.0,
+            'target_low': 160.0,
+            'target_high': 220.0,
+            'spread': 60.0,
+            'spread_pct': 0.3529,
+            'consensus_tight': False,
+            'guidance_drift': 0.1453,
+            'signal': 'Wide dispersion = harder to shock',
+        },
+        'options_expectations': {
+            'atm_iv': 0.32,
+            'historical_volatility': 0.28,
+            'iv_vs_historical': 1.1429,
+            'front_iv': 0.32,
+            'back_iv': 0.26,
+            'iv_term_spread': 0.06,
+            'signal': 'IV roughly in line with historical',
+        },
+        'positioning_flow': {
+            'call_oi': 185000,
+            'put_oi': 142000,
+            'put_call_oi_ratio': 0.7676,
+            'price_drift_pct': 0.035,
+            'drift_direction': 'upward',
+            'signal': 'Mixed positioning signals',
+        },
+        'narrative_alignment': {
+            'sector': 'Technology',
+            'industry': 'Consumer Electronics',
+            'themes': ['AI'],
+            'price_ahead_of_narrative': False,
+            'narrative_ahead_of_price': False,
+            'signal': 'Aligned with theme(s): AI',
+        },
+        'timestamp': '2026-02-14T16:45:00',
+    },
+    'NVDA': {
+        'symbol': 'NVDA',
+        'name': 'NVIDIA Corporation',
+        'earnings_date': '2026-02-26',
+        'expectation_density': {
+            'analyst_count': 45,
+            'target_mean': 850.0,
+            'target_low': 600.0,
+            'target_high': 1100.0,
+            'spread': 500.0,
+            'spread_pct': 0.6868,
+            'consensus_tight': False,
+            'guidance_drift': 0.1668,
+            'signal': 'Wide dispersion = harder to shock',
+        },
+        'options_expectations': {
+            'atm_iv': 0.55,
+            'historical_volatility': 0.42,
+            'iv_vs_historical': 1.3095,
+            'front_iv': 0.55,
+            'back_iv': 0.40,
+            'iv_term_spread': 0.15,
+            'signal': 'IV > historical realized → fear priced in',
+        },
+        'positioning_flow': {
+            'call_oi': 320000,
+            'put_oi': 180000,
+            'put_call_oi_ratio': 0.5625,
+            'price_drift_pct': 0.052,
+            'drift_direction': 'upward',
+            'signal': 'Drift + call buying = crowded',
+        },
+        'narrative_alignment': {
+            'sector': 'Technology',
+            'industry': 'Semiconductors',
+            'themes': ['AI'],
+            'price_ahead_of_narrative': True,
+            'narrative_ahead_of_price': False,
+            'signal': 'Price ahead of narrative = early positioning',
+        },
+        'timestamp': '2026-02-14T16:45:00',
+    },
+    'JPM': {
+        'symbol': 'JPM',
+        'name': 'JPMorgan Chase & Co.',
+        'earnings_date': '2026-02-20',
+        'expectation_density': {
+            'analyst_count': 28,
+            'target_mean': 210.0,
+            'target_low': 185.0,
+            'target_high': 230.0,
+            'spread': 45.0,
+            'spread_pct': 0.2250,
+            'consensus_tight': False,
+            'guidance_drift': 0.05,
+            'signal': 'Wide dispersion = harder to shock',
+        },
+        'options_expectations': {
+            'atm_iv': 0.24,
+            'historical_volatility': 0.22,
+            'iv_vs_historical': 1.0909,
+            'front_iv': 0.24,
+            'back_iv': 0.20,
+            'iv_term_spread': 0.04,
+            'signal': 'IV roughly in line with historical',
+        },
+        'positioning_flow': {
+            'call_oi': 95000,
+            'put_oi': 110000,
+            'put_call_oi_ratio': 1.1579,
+            'price_drift_pct': 0.005,
+            'drift_direction': 'flat',
+            'signal': 'Flat price + rising IV = hedging',
+        },
+        'narrative_alignment': {
+            'sector': 'Financial Services',
+            'industry': 'Banks - Diversified',
+            'themes': ['Rate Sensitivity'],
+            'price_ahead_of_narrative': False,
+            'narrative_ahead_of_price': False,
+            'signal': 'Aligned with theme(s): Rate Sensitivity',
+        },
+        'timestamp': '2026-02-14T16:45:00',
+    },
+    'TSLA': {
+        'symbol': 'TSLA',
+        'name': 'Tesla Inc.',
+        'earnings_date': '2026-02-24',
+        'expectation_density': {
+            'analyst_count': 42,
+            'target_mean': 275.0,
+            'target_low': 120.0,
+            'target_high': 400.0,
+            'spread': 280.0,
+            'spread_pct': 1.1200,
+            'consensus_tight': False,
+            'guidance_drift': 0.10,
+            'signal': 'Wide dispersion = harder to shock',
+        },
+        'options_expectations': {
+            'atm_iv': 0.62,
+            'historical_volatility': 0.55,
+            'iv_vs_historical': 1.1273,
+            'front_iv': 0.62,
+            'back_iv': 0.48,
+            'iv_term_spread': 0.14,
+            'signal': 'IV roughly in line with historical',
+        },
+        'positioning_flow': {
+            'call_oi': 410000,
+            'put_oi': 380000,
+            'put_call_oi_ratio': 0.9268,
+            'price_drift_pct': -0.028,
+            'drift_direction': 'downward',
+            'signal': 'Mixed positioning signals',
+        },
+        'narrative_alignment': {
+            'sector': 'Consumer Cyclical',
+            'industry': 'Auto Manufacturers',
+            'themes': ['AI', 'Energy Transition'],
+            'price_ahead_of_narrative': False,
+            'narrative_ahead_of_price': True,
+            'signal': 'Narrative ahead of price = late sentiment',
+        },
+        'timestamp': '2026-02-14T16:45:00',
+    },
+}
+
+
 def get_mock_sentiment(symbol):
     """Get mock sentiment data for a symbol"""
     return MOCK_SENTIMENT_DATA.get(symbol, MOCK_SENTIMENT_DATA['AAPL'])
@@ -190,3 +428,11 @@ def get_mock_market_data(symbol):
 def get_mock_risk_metrics(symbol):
     """Get mock risk metrics for a symbol"""
     return MOCK_RISK_METRICS.get(symbol, MOCK_RISK_METRICS['AAPL'])
+
+def get_mock_earnings_calendar(year, month):
+    """Get mock earnings calendar for a given month"""
+    return _generate_mock_earnings_calendar(year, month)
+
+def get_mock_earnings_snapshot(symbol):
+    """Get mock earnings snapshot for a symbol"""
+    return MOCK_EARNINGS_SNAPSHOTS.get(symbol, MOCK_EARNINGS_SNAPSHOTS['AAPL'])
