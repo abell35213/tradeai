@@ -14,6 +14,13 @@ from datetime import datetime, timedelta
 from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
 import numpy as np
+import os
+
+# Check if demo mode
+DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
+
+if DEMO_MODE:
+    from demo_data import get_mock_sentiment, get_mock_market_data
 
 class OpportunityFinder:
     """Find high-probability trading opportunities for derivatives"""
@@ -54,23 +61,29 @@ class OpportunityFinder:
         """Analyze a single symbol for opportunities"""
         try:
             # Get sentiment analysis
-            sentiment = self.sentiment_analyzer.analyze_symbol(symbol)
-            
-            if sentiment.get('confidence', 0) < 0.5:
-                return None
-            
-            # Get market data
-            ticker = yf.Ticker(symbol)
-            history = ticker.history(period="1mo")
-            
-            if len(history) < 10:
-                return None
-            
-            current_price = history['Close'].iloc[-1]
-            volatility = history['Close'].pct_change().std() * np.sqrt(252)
+            if DEMO_MODE:
+                sentiment = get_mock_sentiment(symbol)
+                market_data = get_mock_market_data(symbol)
+                current_price = market_data['current_price']
+                volatility = market_data['volatility']
+            else:
+                sentiment = self.sentiment_analyzer.analyze_symbol(symbol)
+                
+                if sentiment.get('confidence', 0) < 0.5:
+                    return None
+                
+                # Get market data
+                ticker = yf.Ticker(symbol)
+                history = ticker.history(period="1mo")
+                
+                if len(history) < 10:
+                    return None
+                
+                current_price = history['Close'].iloc[-1]
+                volatility = history['Close'].pct_change().std() * np.sqrt(252)
             
             # Analyze options if available
-            options_analysis = self._analyze_options(symbol, ticker, current_price, volatility)
+            options_analysis = self._analyze_options(symbol, current_price, volatility)
             
             # Calculate overall opportunity score
             score = self._calculate_opportunity_score(
@@ -95,9 +108,35 @@ class OpportunityFinder:
         except Exception as e:
             return None
     
-    def _analyze_options(self, symbol, ticker, current_price, volatility):
+    def _analyze_options(self, symbol, current_price, volatility):
         """Analyze options chain for opportunities"""
+        if DEMO_MODE:
+            # Return mock options data
+            return {
+                'available': True,
+                'expiration': '2026-03-20',
+                'expirations_available': 8,
+                'atm_call': {
+                    'strike': round(current_price / 5) * 5,
+                    'last_price': current_price * 0.03,
+                    'bid': current_price * 0.028,
+                    'ask': current_price * 0.032,
+                    'volume': 1250,
+                    'open_interest': 8500
+                },
+                'atm_put': {
+                    'strike': round(current_price / 5) * 5,
+                    'last_price': current_price * 0.025,
+                    'bid': current_price * 0.023,
+                    'ask': current_price * 0.027,
+                    'volume': 980,
+                    'open_interest': 6200
+                },
+                'put_call_ratio': 0.78
+            }
+        
         try:
+            ticker = yf.Ticker(symbol)
             expirations = ticker.options
             
             if not expirations or len(expirations) == 0:

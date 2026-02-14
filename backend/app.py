@@ -15,9 +15,14 @@ import yfinance as yf
 from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
 from opportunity_finder import OpportunityFinder
+from demo_data import get_mock_sentiment, get_mock_market_data, get_mock_risk_metrics
+import os
 
 app = Flask(__name__)
 CORS(app)
+
+# Demo mode flag (set to True when no internet access)
+DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
 
 # Initialize components
 sentiment_analyzer = SentimentAnalyzer()
@@ -36,11 +41,15 @@ def health_check():
 def get_sentiment(symbol):
     """Get sentiment analysis for a given symbol"""
     try:
-        sentiment_data = sentiment_analyzer.analyze_symbol(symbol)
+        if DEMO_MODE:
+            sentiment_data = get_mock_sentiment(symbol)
+        else:
+            sentiment_data = sentiment_analyzer.analyze_symbol(symbol)
         return jsonify({
             'success': True,
             'symbol': symbol,
-            'sentiment': sentiment_data
+            'sentiment': sentiment_data,
+            'demo_mode': DEMO_MODE
         })
     except Exception as e:
         return jsonify({
@@ -52,18 +61,18 @@ def get_sentiment(symbol):
 def get_market_data(symbol):
     """Get market data for a given symbol"""
     try:
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
-        history = ticker.history(period="1mo")
-        
-        # Calculate key metrics
-        current_price = history['Close'].iloc[-1] if len(history) > 0 else None
-        volatility = history['Close'].pct_change().std() * (252 ** 0.5) if len(history) > 1 else None
-        
-        return jsonify({
-            'success': True,
-            'symbol': symbol,
-            'data': {
+        if DEMO_MODE:
+            data = get_mock_market_data(symbol)
+        else:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            history = ticker.history(period="1mo")
+            
+            # Calculate key metrics
+            current_price = history['Close'].iloc[-1] if len(history) > 0 else None
+            volatility = history['Close'].pct_change().std() * (252 ** 0.5) if len(history) > 1 else None
+            
+            data = {
                 'current_price': float(current_price) if current_price else None,
                 'volatility': float(volatility) if volatility else None,
                 'market_cap': info.get('marketCap'),
@@ -71,6 +80,12 @@ def get_market_data(symbol):
                 'beta': info.get('beta'),
                 'pe_ratio': info.get('trailingPE'),
             }
+        
+        return jsonify({
+            'success': True,
+            'symbol': symbol,
+            'data': data,
+            'demo_mode': DEMO_MODE
         })
     except Exception as e:
         return jsonify({
@@ -167,31 +182,35 @@ def find_opportunities():
 def get_risk_metrics(symbol):
     """Get risk metrics for a symbol"""
     try:
-        ticker = yf.Ticker(symbol)
-        history = ticker.history(period="3mo")
-        
-        if len(history) < 2:
-            return jsonify({
-                'success': False,
-                'error': 'Insufficient data'
-            }), 404
-        
-        returns = history['Close'].pct_change().dropna()
-        
-        metrics = {
-            'volatility_daily': float(returns.std()),
-            'volatility_annual': float(returns.std() * (252 ** 0.5)),
-            'sharpe_ratio': float(returns.mean() / returns.std() * (252 ** 0.5)) if returns.std() > 0 else 0,
-            'max_drawdown': float((history['Close'] / history['Close'].cummax() - 1).min()),
-            'var_95': float(returns.quantile(0.05)),
-            'skewness': float(returns.skew()),
-            'kurtosis': float(returns.kurtosis())
-        }
+        if DEMO_MODE:
+            metrics = get_mock_risk_metrics(symbol)
+        else:
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(period="3mo")
+            
+            if len(history) < 2:
+                return jsonify({
+                    'success': False,
+                    'error': 'Insufficient data'
+                }), 404
+            
+            returns = history['Close'].pct_change().dropna()
+            
+            metrics = {
+                'volatility_daily': float(returns.std()),
+                'volatility_annual': float(returns.std() * (252 ** 0.5)),
+                'sharpe_ratio': float(returns.mean() / returns.std() * (252 ** 0.5)) if returns.std() > 0 else 0,
+                'max_drawdown': float((history['Close'] / history['Close'].cummax() - 1).min()),
+                'var_95': float(returns.quantile(0.05)),
+                'skewness': float(returns.skew()),
+                'kurtosis': float(returns.kurtosis())
+            }
         
         return jsonify({
             'success': True,
             'symbol': symbol,
-            'risk_metrics': metrics
+            'risk_metrics': metrics,
+            'demo_mode': DEMO_MODE
         })
     except Exception as e:
         return jsonify({
@@ -202,4 +221,6 @@ def get_risk_metrics(symbol):
 if __name__ == '__main__':
     print("Starting Derivatives Trading Sentiment Tracker API...")
     print("Available at: http://localhost:5000")
+    if DEMO_MODE:
+        print("⚠️  DEMO MODE: Using mock data (no internet connection)")
     app.run(debug=True, host='0.0.0.0', port=5000)
