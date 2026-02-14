@@ -178,7 +178,10 @@ class VolSurfaceAnalyzer:
             if len(calls) == 0 or len(puts) == 0:
                 return result
 
-            # Approximate 25-delta strikes: ~5% OTM for calls, ~5% OTM for puts
+            # Approximate 25-delta strikes using ±5% OTM as a simplified proxy.
+            # A true 25-delta calculation would require Black-Scholes delta
+            # inversion for each strike, which depends on time-to-expiry and IV.
+            # This approximation is reasonable for liquid names with moderate IV.
             otm_call_strike = current_price * 1.05
             otm_put_strike = current_price * 0.95
 

@@ -186,6 +186,10 @@ class RegimeClassifier:
             if call_oi > 0:
                 ratio = put_oi / call_oi
                 result['put_call_oi_ratio'] = round(ratio, 4)
+                # Put/call OI > 1.2 implies heavy put hedging; dealers are
+                # short puts, creating negative gamma (amplifying moves).
+                # Below 0.8 implies call-heavy positioning with positive gamma
+                # (dampening moves as dealers hedge by selling into rallies).
                 if ratio > 1.2:
                     result['gamma_direction'] = 'negative'
                 elif ratio < 0.8:

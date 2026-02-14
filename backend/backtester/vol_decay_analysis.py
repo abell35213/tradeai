@@ -152,9 +152,9 @@ class VolDecayAnalyzer:
             post_close = float(hist.loc[post_dates[0], 'Close'])
             realized_move = abs(post_close - pre_close) / pre_close
 
-            # Implied move proxy from pre-earnings vol
+            # Implied move proxy: 1-day implied move from pre-earnings realized vol
             daily_vol = float(pre_returns.std()) if len(pre_returns) > 2 else 0.02
-            implied_move = daily_vol * np.sqrt(1)
+            implied_move = daily_vol  # 1-day horizon
 
             return {
                 'date': ed.strftime('%Y-%m-%d'),

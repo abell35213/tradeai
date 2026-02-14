@@ -163,15 +163,18 @@ class EarningsBacktester:
             # Realized move
             realized_move = abs(post_close - pre_close) / pre_close
 
-            # Implied move estimate: use recent volatility as proxy
+            # Implied move estimate: 1-day implied move from recent realized vol
             recent_returns = hist.loc[pre_dates[-20:], 'Close'].pct_change().dropna()
             daily_vol = float(recent_returns.std()) if len(recent_returns) > 5 else 0.02
-            implied_move = daily_vol * np.sqrt(1)  # 1-day implied move
+            implied_move = daily_vol  # 1-day horizon
 
-            # Strategy return: straddle profits from |move| - implied
+            # Strategy return calculation:
             if strategy == 'straddle':
+                # Straddle profits when |realized move| exceeds implied move
                 return_pct = realized_move - implied_move
-            else:  # strangle: needs a wider move
+            else:
+                # Strangle breakeven is wider (~1.3x implied for OTM strikes)
+                # and max loss is limited to ~50% of premium collected
                 return_pct = max(realized_move - implied_move * 1.3, -implied_move * 0.5)
 
             # Post-earnings drift (5-day)

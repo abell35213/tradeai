@@ -63,12 +63,13 @@ class PositionSizer:
         # Liquidity adjustment
         liquidity_adjusted_size = raw_size * liquidity
 
-        # Implied-edge overlay (optional): boost if implied edge > historical
+        # Implied-edge overlay (optional): boost if implied edge > historical.
+        # The ±30% cap prevents extreme sizing swings from a single IV
+        # snapshot while still rewarding high-conviction dislocations.
         edge_adjustment = 1.0
         if implied_edge is not None and hist_edge > 0:
             implied = max(0.0, float(implied_edge))
             edge_ratio = implied / hist_edge if hist_edge > 0 else 1.0
-            # Cap boost/reduction at ±30%
             edge_adjustment = max(0.7, min(1.3, edge_ratio))
 
         final_size = round(liquidity_adjusted_size * edge_adjustment, 2)
