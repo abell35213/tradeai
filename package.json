@@ -1,0 +1,14 @@
+{
+  "name": "tradeai",
+  "version": "1.0.0",
+  "description": "Derivatives Trading Sentiment Tracker",
+  "main": "index.js",
+  "scripts": {
+    "start": "cd frontend && npm start",
+    "build": "cd frontend && npm run build",
+    "server": "python backend/app.py"
+  },
+  "keywords": ["trading", "derivatives", "sentiment", "ai"],
+  "author": "",
+  "license": "MIT"
+}
