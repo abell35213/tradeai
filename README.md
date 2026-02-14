@@ -74,9 +74,12 @@ cd ..
 
 ### Running the Application
 
+#### Development Mode
+
 1. **Start the Backend API**
 ```bash
-python backend/app.py
+# For development with debug mode enabled
+DEBUG=true DEMO_MODE=true python backend/app.py
 ```
 The API will be available at `http://localhost:5000`
 
@@ -86,6 +89,17 @@ cd frontend
 npm start
 ```
 The web app will open at `http://localhost:3000`
+
+#### Production Mode
+
+For production deployment, ensure debug mode is disabled:
+
+```bash
+# Production mode (debug disabled, requires internet for real data)
+python backend/app.py
+```
+
+**Security Note:** Never run Flask with `debug=True` in production environments as it can expose sensitive information and allow arbitrary code execution.
 
 ## 💡 Features
 
