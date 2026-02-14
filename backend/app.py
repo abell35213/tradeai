@@ -16,6 +16,13 @@ from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
 from opportunity_finder import OpportunityFinder
 from earnings_analyzer import EarningsAnalyzer
+from regime_classifier import RegimeClassifier
+from risk_engine import RiskEngine
+from position_sizer import PositionSizer
+from vol_surface_analyzer import VolSurfaceAnalyzer
+from backtester.earnings_backtest import EarningsBacktester
+from backtester.vol_decay_analysis import VolDecayAnalyzer
+from backtester.setup_performance import SetupPerformanceTracker
 from demo_data import get_mock_sentiment, get_mock_market_data, get_mock_risk_metrics, get_mock_earnings_calendar, get_mock_earnings_snapshot
 import os
 
@@ -30,6 +37,13 @@ sentiment_analyzer = SentimentAnalyzer()
 derivatives_calc = DerivativesCalculator()
 opportunity_finder = OpportunityFinder()
 earnings_analyzer = EarningsAnalyzer()
+regime_classifier = RegimeClassifier()
+risk_engine = RiskEngine()
+position_sizer = PositionSizer()
+vol_surface_analyzer = VolSurfaceAnalyzer()
+earnings_backtester = EarningsBacktester()
+vol_decay_analyzer = VolDecayAnalyzer()
+setup_tracker = SetupPerformanceTracker(earnings_analyzer=earnings_analyzer)
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -259,6 +273,182 @@ def get_earnings_snapshot(symbol):
             'symbol': symbol,
             'snapshot': snapshot,
             'demo_mode': DEMO_MODE
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ------------------------------------------------------------------
+# Regime classification
+# ------------------------------------------------------------------
+
+@app.route('/api/regime', methods=['GET'])
+def get_regime():
+    """Get current market regime classification"""
+    try:
+        regime = regime_classifier.classify()
+        return jsonify({
+            'success': True,
+            'regime': regime,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ------------------------------------------------------------------
+# Risk engine
+# ------------------------------------------------------------------
+
+@app.route('/api/risk/portfolio', methods=['POST'])
+def get_portfolio_risk():
+    """Calculate portfolio-level risk metrics"""
+    try:
+        data = request.json
+        positions = data.get('positions', [])
+        risk = risk_engine.calculate_portfolio_risk(positions)
+        return jsonify({
+            'success': True,
+            'risk': risk,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ------------------------------------------------------------------
+# Position sizing
+# ------------------------------------------------------------------
+
+@app.route('/api/position-size', methods=['POST'])
+def calculate_position_size():
+    """Calculate recommended position size"""
+    try:
+        data = request.json
+        symbol = data.get('symbol')
+        confidence_score = data.get('confidence_score', 3)
+        historical_edge = data.get('historical_edge', 0.5)
+        implied_edge = data.get('implied_edge')
+        base_risk = data.get('base_risk')
+
+        if symbol:
+            result = position_sizer.size_from_symbol(
+                symbol=symbol,
+                confidence_score=confidence_score,
+                historical_edge=historical_edge,
+                implied_edge=implied_edge,
+                base_risk=base_risk,
+            )
+        else:
+            liquidity_score = data.get('liquidity_score', 0.5)
+            result = position_sizer.calculate_size(
+                confidence_score=confidence_score,
+                liquidity_score=liquidity_score,
+                historical_edge=historical_edge,
+                implied_edge=implied_edge,
+                base_risk=base_risk,
+            )
+
+        return jsonify({
+            'success': True,
+            'sizing': result,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ------------------------------------------------------------------
+# Vol surface analysis
+# ------------------------------------------------------------------
+
+@app.route('/api/vol-surface/<symbol>', methods=['GET'])
+def get_vol_surface(symbol):
+    """Get vol surface analysis for a symbol"""
+    try:
+        analysis = vol_surface_analyzer.analyze(symbol)
+        return jsonify({
+            'success': True,
+            'symbol': symbol,
+            'analysis': analysis,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ------------------------------------------------------------------
+# Backtesting
+# ------------------------------------------------------------------
+
+@app.route('/api/backtest/earnings/<symbol>', methods=['GET'])
+def backtest_earnings(symbol):
+    """Backtest earnings strategy for a symbol"""
+    try:
+        years = request.args.get('years', 10, type=int)
+        strategy = request.args.get('strategy', 'straddle')
+        result = earnings_backtester.backtest_earnings(symbol, years=years, strategy=strategy)
+        return jsonify({
+            'success': True,
+            'backtest': result,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/backtest/vol-decay/<symbol>', methods=['GET'])
+def backtest_vol_decay(symbol):
+    """Analyze vol decay patterns for a symbol"""
+    try:
+        years = request.args.get('years', 5, type=int)
+        result = vol_decay_analyzer.analyze_vol_decay(symbol, years=years)
+        return jsonify({
+            'success': True,
+            'vol_decay': result,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/backtest/setup-performance', methods=['POST'])
+def get_setup_performance():
+    """Get performance metrics by setup type"""
+    try:
+        data = request.json
+        symbols = data.get('symbols', ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA'])
+        years = data.get('years', 10)
+        result = setup_tracker.get_performance_by_setup(symbols, years=years)
+        return jsonify({
+            'success': True,
+            'performance': result,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/backtest/sharpe-by-setup', methods=['POST'])
+def get_sharpe_by_setup():
+    """Get Sharpe ratio by setup type"""
+    try:
+        data = request.json
+        symbols = data.get('symbols', ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA'])
+        years = data.get('years', 10)
+        result = setup_tracker.get_sharpe_by_setup(symbols, years=years)
+        return jsonify({
+            'success': True,
+            'sharpe': result,
         })
     except Exception as e:
         return jsonify({
