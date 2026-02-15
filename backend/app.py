@@ -23,11 +23,17 @@ from vol_surface_analyzer import VolSurfaceAnalyzer
 from market_data_provider import YFinanceDataProvider
 from circuit_breaker import CircuitBreaker
 from trade_ticket import build_trade_ticket, evaluate_ticket
+from index_vol_engine import IndexVolEngine
 from backtester.earnings_backtest import EarningsBacktester
 from backtester.vol_decay_analysis import VolDecayAnalyzer
 from backtester.setup_performance import SetupPerformanceTracker
-from demo_data import get_mock_sentiment, get_mock_market_data, get_mock_risk_metrics, get_mock_earnings_calendar, get_mock_earnings_snapshot
+from demo_data import (
+    get_mock_sentiment, get_mock_market_data, get_mock_risk_metrics,
+    get_mock_earnings_calendar, get_mock_earnings_snapshot,
+    get_mock_vol_surface, get_mock_regime,
+)
 import os
+import uuid
 
 app = Flask(__name__)
 CORS(app)
@@ -49,6 +55,17 @@ circuit_breaker = CircuitBreaker()
 earnings_backtester = EarningsBacktester()
 vol_decay_analyzer = VolDecayAnalyzer()
 setup_tracker = SetupPerformanceTracker(earnings_analyzer=earnings_analyzer)
+index_vol_engine = IndexVolEngine(
+    vol_surface_analyzer=vol_surface_analyzer,
+    regime_classifier=regime_classifier,
+    position_sizer=position_sizer,
+    risk_engine=risk_engine,
+)
+
+# In-memory store for pending trade tickets (keyed by ticket_id)
+_pending_tickets = {}
+# In-memory log of approved / rejected tickets
+_execution_log = []
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -533,6 +550,170 @@ def submit_trade_ticket():
         )
         existing = data.get('existing_positions', [])
         ticket = evaluate_ticket(ticket, risk_engine, existing)
+        return jsonify({'success': True, 'ticket': ticket})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ------------------------------------------------------------------
+# Index vol engine  (edge-based signal)
+# ------------------------------------------------------------------
+
+@app.route('/api/index-vol/<symbol>', methods=['GET'])
+def get_index_vol_analysis(symbol):
+    """Get edge-based vol-selling analysis for a symbol."""
+    try:
+        if DEMO_MODE:
+            from index_vol_engine import IndexVolEngine as _IVE
+            vol_surface_data = get_mock_vol_surface(symbol)
+            regime_data = get_mock_regime()
+            trade_gate = regime_classifier.should_trade(regime_data)
+            engine = _IVE()
+            components = engine._score_components(vol_surface_data, regime_data)
+            edge_score = engine._composite_edge(components)
+            pass_fail = engine._evaluate_gate(edge_score, trade_gate, components)
+            result = {
+                'symbol': symbol,
+                'edge_score': round(edge_score, 4),
+                'components': components,
+                'regime_snapshot': regime_data,
+                'trade_gate': pass_fail,
+                'sizing': None,
+                'timestamp': datetime.now().isoformat(),
+            }
+        else:
+            result = index_vol_engine.analyze(symbol)
+        return jsonify({'success': True, 'analysis': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ------------------------------------------------------------------
+# Trade ticket pipeline  — index vol
+# ------------------------------------------------------------------
+
+@app.route('/api/trade-ticket/index-vol', methods=['POST'])
+def generate_index_vol_ticket():
+    """
+    Generate a trade ticket for an index vol credit spread.
+
+    Request body (JSON):
+        symbol (str): Underlying ticker.
+        existing_positions (list, optional): Current portfolio positions.
+
+    Returns a full ticket with strikes, credit, max loss, POP estimate,
+    regime snapshot, risk before/after, and an idempotency key.
+    """
+    try:
+        data = request.json or {}
+        symbol = data.get('symbol', 'SPY')
+        existing = data.get('existing_positions', [])
+
+        if DEMO_MODE:
+            from index_vol_engine import IndexVolEngine as _IVE
+            vol_surface_data = get_mock_vol_surface(symbol)
+            regime_data = get_mock_regime()
+            trade_gate = regime_classifier.should_trade(regime_data)
+            engine = _IVE(risk_engine=risk_engine)
+            components = engine._score_components(vol_surface_data, regime_data)
+            edge_score = engine._composite_edge(components)
+            pass_fail = engine._evaluate_gate(edge_score, trade_gate, components)
+
+            risk_before = risk_engine.calculate_portfolio_risk(existing)
+            risk_after = risk_engine.calculate_portfolio_risk(
+                list(existing) + [{
+                    'symbol': symbol, 'delta': -0.30, 'vega': -0.10,
+                    'gamma': -0.01, 'notional': 500,
+                    'earnings_date': None, 'expiry_bucket': '7-30d',
+                }]
+            )
+            ticket = {
+                'ticket_id': str(uuid.uuid4()),
+                'symbol': symbol,
+                'strategy': 'defined-risk credit spread',
+                'expiry': '2026-03-20',
+                'strikes': {'short': 470.0, 'long': 465.0},
+                'wing_width': 5.0,
+                'credit': 1.25,
+                'max_loss': 375.0,
+                'pop_estimate': 75.0,
+                'regime_snapshot': regime_data,
+                'trade_gate': pass_fail,
+                'edge_score': round(edge_score, 4),
+                'components': components,
+                'risk_before': risk_before,
+                'risk_after': risk_after,
+                'sizing': None,
+                'status': 'pending',
+                'created_at': datetime.now().isoformat(),
+            }
+        else:
+            ticket = index_vol_engine.generate_trade_ticket(symbol, existing)
+
+        # Store in pending tickets
+        _pending_tickets[ticket['ticket_id']] = ticket
+        return jsonify({'success': True, 'ticket': ticket})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trade-ticket/pending', methods=['GET'])
+def get_pending_tickets():
+    """Return all pending trade tickets."""
+    try:
+        pending = [
+            t for t in _pending_tickets.values()
+            if t.get('status') == 'pending'
+        ]
+        return jsonify({'success': True, 'tickets': pending})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/execute', methods=['POST'])
+def execute_trade():
+    """
+    Approve or reject a pending trade ticket.
+
+    Request body (JSON):
+        ticket_id (str): The idempotency key / ticket ID.
+        action (str): 'approve' or 'reject'.
+
+    On approval the ticket is logged for track-record building.
+    """
+    try:
+        data = request.json or {}
+        ticket_id = data.get('ticket_id')
+        action = data.get('action', '').lower()
+
+        if not ticket_id or action not in ('approve', 'reject'):
+            return jsonify({
+                'success': False,
+                'error': 'ticket_id and action (approve|reject) are required',
+            }), 400
+
+        ticket = _pending_tickets.get(ticket_id)
+        if ticket is None:
+            return jsonify({
+                'success': False,
+                'error': f'Ticket {ticket_id} not found',
+            }), 404
+
+        if ticket.get('status') != 'pending':
+            return jsonify({
+                'success': False,
+                'error': f'Ticket {ticket_id} is already {ticket.get("status")}',
+            }), 409
+
+        ticket['status'] = 'approved' if action == 'approve' else 'rejected'
+        ticket['executed_at'] = datetime.now().isoformat()
+
+        _execution_log.append({
+            'ticket_id': ticket_id,
+            'action': action,
+            'timestamp': ticket['executed_at'],
+            'symbol': ticket.get('symbol'),
+            'strategy': ticket.get('strategy'),
+        })
+
         return jsonify({'success': True, 'ticket': ticket})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
