@@ -73,7 +73,7 @@ class TestRegimeShouldTrade:
             'details': {'macro_proximity': {'elevated': False}},
         }
         result = rc.should_trade(classification)
-        assert result['allowed'] is True
+        assert result['pass_trade'] is True
 
     def test_blocked_when_stressed(self):
         rc = RegimeClassifier()
@@ -82,7 +82,7 @@ class TestRegimeShouldTrade:
             'details': {'macro_proximity': {'elevated': False}},
         }
         result = rc.should_trade(classification)
-        assert result['allowed'] is False
+        assert result['pass_trade'] is False
         assert any('stressed' in r for r in result['reasons'])
 
     def test_blocked_when_macro_elevated(self):
@@ -92,7 +92,7 @@ class TestRegimeShouldTrade:
             'details': {'macro_proximity': {'elevated': True}},
         }
         result = rc.should_trade(classification)
-        assert result['allowed'] is False
+        assert result['pass_trade'] is False
         assert any('Macro' in r for r in result['reasons'])
 
     def test_blocked_both_stressed_and_macro(self):
@@ -102,5 +102,5 @@ class TestRegimeShouldTrade:
             'details': {'macro_proximity': {'elevated': True}},
         }
         result = rc.should_trade(classification)
-        assert result['allowed'] is False
+        assert result['pass_trade'] is False
         assert len(result['reasons']) == 2

@@ -40,6 +40,17 @@ class RegimeClassifier:
     # Macro-sensitive tickers for event proximity detection
     MACRO_TICKERS = ['TLT', 'GLD', 'UUP']
 
+    # --- SPY-specific gating (v1) ---
+    # Block if VIX day-over-day change exceeds this percentage
+    VIX_SPIKE_PCT = 10.0
+    # Block if VIX absolute level exceeds this ceiling
+    VIX_HARD_CEILING = 35.0
+    # Block if SPY 5-day ATR / 20-day ATR exceeds this ratio
+    ATR_RATIO_THRESHOLD = 1.5
+    # Manual macro-event calendar: list of (ISO-date-string, label) tuples.
+    # Add upcoming FOMC, CPI, NFP, etc. dates here.
+    MACRO_EVENT_CALENDAR = []
+
     def __init__(self):
         pass
 
@@ -84,6 +95,8 @@ class RegimeClassifier:
             'vix_current': None,
             'vix_percentile': None,
             'vix_sma_20': None,
+            'vix_prev_close': None,
+            'vix_change_pct': None,
         }
 
         try:
@@ -99,6 +112,14 @@ class RegimeClassifier:
             result['vix_current'] = round(current, 2)
             result['vix_percentile'] = round(percentile, 1)
             result['vix_sma_20'] = round(sma_20, 2)
+
+            if len(closes) >= 2:
+                prev = float(closes.iloc[-2])
+                result['vix_prev_close'] = round(prev, 2)
+                if prev > 0:
+                    result['vix_change_pct'] = round(
+                        (current - prev) / prev * 100, 2
+                    )
 
             if percentile <= self.VOL_COMPRESSED_PCTL:
                 result['regime'] = 'compressed'
@@ -276,8 +297,10 @@ class RegimeClassifier:
 
     def should_trade(self, classification=None):
         """
-        Hard gate: return False if regime is *stressed* **or** macro
-        proximity is elevated.
+        Hard gate: return False if regime is *stressed*, macro
+        proximity is elevated, VIX is spiking or above the hard ceiling,
+        a known macro event is within 48 h, or realized vol is rising
+        sharply.
 
         Parameters
         ----------
@@ -288,7 +311,7 @@ class RegimeClassifier:
         Returns
         -------
         dict with keys:
-            - allowed (bool)
+            - pass_trade (bool)
             - reasons (list[str])
         """
         if classification is None:
@@ -304,7 +327,89 @@ class RegimeClassifier:
         if macro.get('elevated', False):
             reasons.append('Macro-event proximity is elevated')
 
+        # --- SPY-specific gating (v1) ---
+
+        vol_details = classification.get('details', {}).get('volatility', {})
+
+        # 1. VIX spike (day-over-day change)
+        vix_change = vol_details.get('vix_change_pct')
+        if vix_change is not None and vix_change > self.VIX_SPIKE_PCT:
+            reasons.append(
+                f'VIX spike: {vix_change:.1f}% day-over-day '
+                f'(threshold: {self.VIX_SPIKE_PCT}%)'
+            )
+
+        # 2. VIX hard ceiling
+        vix_current = vol_details.get('vix_current')
+        if vix_current is not None and vix_current > self.VIX_HARD_CEILING:
+            reasons.append(
+                f'VIX above hard ceiling: {vix_current:.1f} '
+                f'(ceiling: {self.VIX_HARD_CEILING})'
+            )
+
+        # 3. Macro event within 48 h (manual calendar)
+        macro_event = self._check_macro_event_within_48h()
+        if macro_event:
+            reasons.append(f'Macro event within 48h: {macro_event}')
+
+        # 4. Realized vol rising sharply (SPY ATR ratio)
+        atr_reason = self._check_realized_vol_rising()
+        if atr_reason:
+            reasons.append(atr_reason)
+
         return {
-            'allowed': len(reasons) == 0,
+            'pass_trade': len(reasons) == 0,
             'reasons': reasons,
         }
+
+    # ------------------------------------------------------------------
+    # SPY-specific gating helpers
+    # ------------------------------------------------------------------
+
+    def _check_macro_event_within_48h(self):
+        """Return event label if a known macro event is within 48 hours,
+        else *None*."""
+        now = datetime.now()
+        cutoff = now + timedelta(hours=48)
+        for event_date_str, label in self.MACRO_EVENT_CALENDAR:
+            try:
+                event_date = datetime.fromisoformat(event_date_str)
+                if now <= event_date <= cutoff:
+                    return label
+            except (ValueError, TypeError):
+                continue
+        return None
+
+    def _check_realized_vol_rising(self):
+        """Return a reason string if SPY 5-day ATR / 20-day ATR exceeds
+        the threshold, else *None*."""
+        try:
+            hist = get_ticker_history('SPY', period='3mo')
+            if len(hist) < 21:
+                return None
+
+            high = hist['High']
+            low = hist['Low']
+            close = hist['Close']
+
+            prev_close = close.shift(1)
+            tr = pd.concat([
+                high - low,
+                (high - prev_close).abs(),
+                (low - prev_close).abs(),
+            ], axis=1).max(axis=1)
+
+            atr_5 = float(tr.iloc[-5:].mean())
+            atr_20 = float(tr.iloc[-20:].mean())
+
+            if atr_20 > 0:
+                ratio = atr_5 / atr_20
+                if ratio > self.ATR_RATIO_THRESHOLD:
+                    return (
+                        f'Realized vol rising sharply: SPY 5d/20d ATR ratio '
+                        f'{ratio:.2f} (threshold: {self.ATR_RATIO_THRESHOLD})'
+                    )
+        except Exception:
+            logger.exception("Failed to check realized vol")
+
+        return None

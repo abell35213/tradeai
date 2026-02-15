@@ -88,7 +88,7 @@ class TestShouldTradeRegression:
             },
         }
         result = classifier.should_trade(classification)
-        assert result['allowed'] is True
+        assert result['pass_trade'] is True
         assert result['reasons'] == []
 
     def test_blocked_stressed(self, classifier):
@@ -99,7 +99,7 @@ class TestShouldTradeRegression:
             },
         }
         result = classifier.should_trade(classification)
-        assert result['allowed'] is False
+        assert result['pass_trade'] is False
         assert any('stressed' in r.lower() for r in result['reasons'])
 
     def test_blocked_macro_elevated(self, classifier):
@@ -110,7 +110,7 @@ class TestShouldTradeRegression:
             },
         }
         result = classifier.should_trade(classification)
-        assert result['allowed'] is False
+        assert result['pass_trade'] is False
         assert any('macro' in r.lower() for r in result['reasons'])
 
     def test_blocked_both_stressed_and_macro(self, classifier):
@@ -121,5 +121,153 @@ class TestShouldTradeRegression:
             },
         }
         result = classifier.should_trade(classification)
-        assert result['allowed'] is False
+        assert result['pass_trade'] is False
         assert len(result['reasons']) == 2
+
+
+# ------------------------------------------------------------------
+# SPY-specific gating (v1) regression
+# ------------------------------------------------------------------
+
+class TestSPYGatingRegression:
+    """Deterministic classification → SPY-specific gate checks."""
+
+    def test_vix_spike_blocks_trade(self, classifier):
+        """VIX day-over-day >10% should block."""
+        classification = {
+            'vol_regime': 'expanding',
+            'details': {
+                'macro_proximity': {'elevated': False},
+                'volatility': {
+                    'vix_current': 22.0,
+                    'vix_prev_close': 19.0,
+                    'vix_change_pct': 15.79,
+                },
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert result['pass_trade'] is False
+        assert any('VIX spike' in r for r in result['reasons'])
+
+    def test_vix_spike_below_threshold_passes(self, classifier):
+        """VIX change under 10% should not trigger spike block."""
+        classification = {
+            'vol_regime': 'expanding',
+            'details': {
+                'macro_proximity': {'elevated': False},
+                'volatility': {
+                    'vix_current': 20.0,
+                    'vix_prev_close': 19.0,
+                    'vix_change_pct': 5.26,
+                },
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert result['pass_trade'] is True
+
+    def test_vix_hard_ceiling_blocks_trade(self, classifier):
+        """VIX above 35 hard ceiling should block."""
+        classification = {
+            'vol_regime': 'expanding',
+            'details': {
+                'macro_proximity': {'elevated': False},
+                'volatility': {
+                    'vix_current': 38.5,
+                    'vix_prev_close': 34.0,
+                    'vix_change_pct': 5.0,
+                },
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert result['pass_trade'] is False
+        assert any('ceiling' in r.lower() for r in result['reasons'])
+
+    def test_vix_below_ceiling_passes(self, classifier):
+        """VIX under the ceiling should not trigger block."""
+        classification = {
+            'vol_regime': 'expanding',
+            'details': {
+                'macro_proximity': {'elevated': False},
+                'volatility': {
+                    'vix_current': 28.0,
+                    'vix_prev_close': 27.0,
+                    'vix_change_pct': 3.7,
+                },
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert result['pass_trade'] is True
+
+    def test_macro_event_within_48h_blocks(self, classifier):
+        """A scheduled macro event within 48 h should block."""
+        from datetime import datetime, timedelta
+        future = (datetime.now() + timedelta(hours=12)).isoformat()
+        classifier.MACRO_EVENT_CALENDAR = [(future, 'FOMC')]
+
+        classification = {
+            'vol_regime': 'expanding',
+            'details': {
+                'macro_proximity': {'elevated': False},
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert result['pass_trade'] is False
+        assert any('FOMC' in r for r in result['reasons'])
+
+        # Restore
+        classifier.MACRO_EVENT_CALENDAR = []
+
+    def test_macro_event_beyond_48h_passes(self, classifier):
+        """A macro event more than 48 h out should not block."""
+        from datetime import datetime, timedelta
+        future = (datetime.now() + timedelta(hours=72)).isoformat()
+        classifier.MACRO_EVENT_CALENDAR = [(future, 'CPI')]
+
+        classification = {
+            'vol_regime': 'expanding',
+            'details': {
+                'macro_proximity': {'elevated': False},
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert result['pass_trade'] is True
+
+        classifier.MACRO_EVENT_CALENDAR = []
+
+    def test_output_has_pass_trade_and_reasons(self, classifier):
+        """should_trade must always return pass_trade (bool) and reasons (list)."""
+        classification = {
+            'vol_regime': 'expanding',
+            'details': {
+                'macro_proximity': {'elevated': False},
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert 'pass_trade' in result
+        assert isinstance(result['pass_trade'], bool)
+        assert 'reasons' in result
+        assert isinstance(result['reasons'], list)
+
+    def test_multiple_spy_blocks_accumulate_reasons(self, classifier):
+        """Multiple SPY blocks should all appear in reasons."""
+        from datetime import datetime, timedelta
+        future = (datetime.now() + timedelta(hours=6)).isoformat()
+        classifier.MACRO_EVENT_CALENDAR = [(future, 'NFP')]
+
+        classification = {
+            'vol_regime': 'stressed',
+            'details': {
+                'macro_proximity': {'elevated': True},
+                'volatility': {
+                    'vix_current': 40.0,
+                    'vix_prev_close': 30.0,
+                    'vix_change_pct': 33.33,
+                },
+            },
+        }
+        result = classifier.should_trade(classification)
+        assert result['pass_trade'] is False
+        # stressed + macro elevated + VIX spike + VIX ceiling + macro calendar = 5
+        assert len(result['reasons']) >= 5
+
+        classifier.MACRO_EVENT_CALENDAR = []
