@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
+from market_cache import get_ticker_history, download_tickers, get_ticker_options, get_option_chain
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +87,7 @@ class RegimeClassifier:
         }
 
         try:
-            vix = yf.Ticker('^VIX')
-            hist = vix.history(period='1y')
+            hist = get_ticker_history('^VIX', period='1y')
             if len(hist) < 20:
                 return result
 
@@ -127,7 +127,7 @@ class RegimeClassifier:
         }
 
         try:
-            data = yf.download(self.SECTOR_ETFS, period='3mo', progress=False)
+            data = download_tickers(self.SECTOR_ETFS, period='3mo')
             if data.empty:
                 return result
 
@@ -175,12 +175,11 @@ class RegimeClassifier:
         }
 
         try:
-            spy = yf.Ticker('SPY')
-            expirations = spy.options
+            expirations = get_ticker_options('SPY')
             if not expirations:
                 return result
 
-            chain = spy.option_chain(expirations[0])
+            chain = get_option_chain('SPY', expirations[0])
             call_oi = int(chain.calls['openInterest'].sum())
             put_oi = int(chain.puts['openInterest'].sum())
             total_oi = call_oi + put_oi
@@ -218,8 +217,7 @@ class RegimeClassifier:
 
         try:
             for sym in self.MACRO_TICKERS:
-                ticker = yf.Ticker(sym)
-                hist = ticker.history(period='1mo')
+                hist = get_ticker_history(sym, period='1mo')
                 if len(hist) < 10:
                     continue
                 returns = hist['Close'].pct_change().dropna()

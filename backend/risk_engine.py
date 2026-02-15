@@ -18,6 +18,7 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 from collections import defaultdict
+from market_cache import get_ticker_info, download_tickers
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ class RiskEngine:
         if symbol in self.SECTOR_MAP:
             return self.SECTOR_MAP[symbol]
         try:
-            info = yf.Ticker(symbol).info
+            info = get_ticker_info(symbol)
             return (info.get('sector') or 'other').lower()
         except Exception:
             logger.exception("Failed to get sector for %s", symbol)
@@ -164,7 +165,7 @@ class RiskEngine:
             return result
 
         try:
-            data = yf.download(symbols, period='3mo', progress=False)
+            data = download_tickers(symbols, period='3mo')
             if data.empty:
                 return result
 
