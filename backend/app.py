@@ -23,7 +23,11 @@ from position_sizer import PositionSizer
 from vol_surface_analyzer import VolSurfaceAnalyzer
 from market_data_provider import YFinanceDataProvider
 from circuit_breaker import CircuitBreaker
-from trade_ticket import build_trade_ticket, evaluate_ticket
+from trade_ticket import (
+    TradeTicket, TicketLeg, EdgeMetrics, RegimeGate,
+    RiskGate, PortfolioAfter, Exits,
+    build_trade_ticket, evaluate_ticket,
+)
 from index_vol_engine import IndexVolEngine
 from backtester.earnings_backtest import EarningsBacktester
 from backtester.vol_decay_analysis import VolDecayAnalyzer
@@ -551,19 +555,17 @@ def submit_trade_ticket():
         except ValidationError as ve:
             return jsonify({'success': False, 'error': ve.errors()}), 422
         ticket = build_trade_ticket(
-            symbol=validated.symbol,
+            underlying=validated.symbol,
             strategy=validated.strategy,
             legs=validated.legs,
-            credit=validated.credit,
+            mid_credit=validated.credit,
             max_loss=validated.max_loss,
-            breakevens=validated.breakevens,
-            quantity=validated.quantity,
+            width=validated.width,
             expiry=validated.expiry,
-            notes=validated.notes,
         )
         existing = validated.existing_positions
         ticket = evaluate_ticket(ticket, risk_engine, existing)
-        return jsonify({'success': True, 'ticket': ticket})
+        return jsonify({'success': True, 'ticket': ticket.model_dump()})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -642,32 +644,51 @@ def generate_index_vol_ticket():
                     'earnings_date': None, 'expiry_bucket': '7-30d',
                 }]
             )
-            ticket = {
-                'ticket_id': str(uuid.uuid4()),
-                'symbol': symbol,
-                'strategy': 'defined-risk credit spread',
-                'expiry': '2026-03-20',
-                'strikes': {'short': 470.0, 'long': 465.0},
-                'wing_width': 5.0,
-                'credit': 1.25,
-                'max_loss': 375.0,
-                'pop_estimate': 75.0,
-                'regime_snapshot': regime_data,
-                'trade_gate': pass_fail,
-                'edge_score': round(edge_score, 4),
-                'components': components,
-                'risk_before': risk_before,
-                'risk_after': risk_after,
-                'sizing': None,
-                'status': 'pending',
-                'created_at': datetime.now().isoformat(),
-            }
+            ticket = TradeTicket(
+                ticket_id=str(uuid.uuid4()),
+                underlying=symbol,
+                strategy='SPY_PUT_CREDIT_SPREAD',
+                expiry='2026-03-20',
+                dte=33,
+                legs=[
+                    TicketLeg(type='put', side='sell', strike=470.0, qty=1),
+                    TicketLeg(type='put', side='buy', strike=465.0, qty=1),
+                ],
+                width=5.0,
+                mid_credit=1.25,
+                limit_credit=1.20,
+                max_loss=375.0,
+                pop_estimate=75.0,
+                edge_metrics=EdgeMetrics(
+                    iv_pct=components.get('iv_rv_spread'),
+                    skew_metric=components.get('skew_dislocation'),
+                    term_structure=components.get('term_structure'),
+                ),
+                regime_gate=RegimeGate(
+                    passed=pass_fail.get('passed', True),
+                    reasons=pass_fail.get('reasons', []),
+                ),
+                risk_gate=RiskGate(
+                    passed=True,
+                    reasons=[],
+                    portfolio_after=PortfolioAfter(
+                        delta=risk_after.get('portfolio_delta', 0.0),
+                        vega=risk_after.get('portfolio_vega', 0.0),
+                        gamma=risk_after.get('portfolio_gamma', 0.0),
+                        max_loss_week=375.0,
+                    ),
+                ),
+                confidence_score=round(edge_score, 4),
+                exits=Exits(),
+                status='pending',
+            )
         else:
             ticket = index_vol_engine.generate_trade_ticket(symbol, existing)
 
-        # Store in pending tickets
-        _pending_tickets[ticket['ticket_id']] = ticket
-        return jsonify({'success': True, 'ticket': ticket})
+        # Store in pending tickets (as dict for mutability)
+        ticket_dict = ticket.model_dump()
+        _pending_tickets[ticket_dict['ticket_id']] = ticket_dict
+        return jsonify({'success': True, 'ticket': ticket_dict})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

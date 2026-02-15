@@ -74,16 +74,16 @@ class TestTradeTicketRequestValidation:
         req = TradeTicketRequest(
             symbol='SPY', strategy='iron condor',
             legs=[{'type': 'call'}], credit=1.5, max_loss=350,
-            breakevens=[480, 520],
+            width=5.0,
         )
         assert req.symbol == 'SPY'
-        assert req.quantity == 1
+        assert req.width == 5.0
 
     def test_empty_symbol_rejected(self):
         with pytest.raises(ValidationError):
             TradeTicketRequest(
                 symbol='', strategy='straddle',
-                legs=[], credit=1.0, max_loss=100, breakevens=[],
+                legs=[], credit=1.0, max_loss=100,
             )
 
 
