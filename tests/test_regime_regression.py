@@ -10,6 +10,8 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
+from datetime import datetime, timedelta
+
 import pytest
 from regime_classifier import RegimeClassifier
 
@@ -200,7 +202,6 @@ class TestSPYGatingRegression:
 
     def test_macro_event_within_48h_blocks(self, classifier):
         """A scheduled macro event within 48 h should block."""
-        from datetime import datetime, timedelta
         future = (datetime.now() + timedelta(hours=12)).isoformat()
         classifier.MACRO_EVENT_CALENDAR = [(future, 'FOMC')]
 
@@ -214,12 +215,8 @@ class TestSPYGatingRegression:
         assert result['pass_trade'] is False
         assert any('FOMC' in r for r in result['reasons'])
 
-        # Restore
-        classifier.MACRO_EVENT_CALENDAR = []
-
     def test_macro_event_beyond_48h_passes(self, classifier):
         """A macro event more than 48 h out should not block."""
-        from datetime import datetime, timedelta
         future = (datetime.now() + timedelta(hours=72)).isoformat()
         classifier.MACRO_EVENT_CALENDAR = [(future, 'CPI')]
 
@@ -231,8 +228,6 @@ class TestSPYGatingRegression:
         }
         result = classifier.should_trade(classification)
         assert result['pass_trade'] is True
-
-        classifier.MACRO_EVENT_CALENDAR = []
 
     def test_output_has_pass_trade_and_reasons(self, classifier):
         """should_trade must always return pass_trade (bool) and reasons (list)."""
@@ -250,7 +245,6 @@ class TestSPYGatingRegression:
 
     def test_multiple_spy_blocks_accumulate_reasons(self, classifier):
         """Multiple SPY blocks should all appear in reasons."""
-        from datetime import datetime, timedelta
         future = (datetime.now() + timedelta(hours=6)).isoformat()
         classifier.MACRO_EVENT_CALENDAR = [(future, 'NFP')]
 
@@ -269,5 +263,3 @@ class TestSPYGatingRegression:
         assert result['pass_trade'] is False
         # stressed + macro elevated + VIX spike + VIX ceiling + macro calendar = 5
         assert len(result['reasons']) >= 5
-
-        classifier.MACRO_EVENT_CALENDAR = []
