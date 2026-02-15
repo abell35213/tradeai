@@ -13,9 +13,12 @@ Core formula:
 Designed for risk-adjusted capital allocation in earnings volatility strategies.
 """
 
+import logging
 import numpy as np
 import yfinance as yf
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class PositionSizer:
@@ -112,10 +115,10 @@ class PositionSizer:
                 vol_score = min(avg_vol / 1_000_000, 1.0)
                 score_components.append(vol_score)
         except Exception:
+            logger.exception("Failed to compute volume score for %s", symbol)
             score_components.append(0.5)
 
         try:
-            ticker = yf.Ticker(symbol)
             expirations = ticker.options
             if expirations:
                 chain = ticker.option_chain(expirations[0])
@@ -125,6 +128,7 @@ class PositionSizer:
                 oi_score = min(total_oi / 100_000, 1.0)
                 score_components.append(oi_score)
         except Exception:
+            logger.exception("Failed to compute OI score for %s", symbol)
             score_components.append(0.5)
 
         liquidity_score = float(np.mean(score_components)) if score_components else 0.5

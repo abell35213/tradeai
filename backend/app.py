@@ -11,6 +11,7 @@ This application provides endpoints for:
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
+import logging
 import yfinance as yf
 from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
@@ -37,6 +38,8 @@ import uuid
 
 app = Flask(__name__)
 CORS(app)
+
+logger = logging.getLogger(__name__)
 
 # Demo mode flag (set to True when no internet access)
 DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
@@ -497,6 +500,7 @@ def check_circuit_breaker():
         try:
             calendar_events = market_data_provider.get_calendar_events()
         except Exception:
+            logger.exception("Failed to get calendar events from data provider")
             calendar_events = []
 
         # Regime info (optional)

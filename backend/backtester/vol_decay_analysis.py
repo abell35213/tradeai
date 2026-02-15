@@ -171,4 +171,5 @@ class VolDecayAnalyzer:
             }
 
         except Exception:
+            logger.exception("Failed to analyze vol event")
             return None

@@ -199,6 +199,7 @@ class EarningsBacktester:
             }
 
         except Exception:
+            logger.exception("Failed to simulate single earnings event")
             return None
 
     def _classify_market_cap(self, market_cap):

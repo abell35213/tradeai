@@ -10,10 +10,13 @@ Uses VIX percentile, correlation analysis, index gamma exposure,
 and macro event proximity to produce regime classifications.
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class RegimeClassifier:
@@ -104,7 +107,7 @@ class RegimeClassifier:
             else:
                 result['regime'] = 'expanding'
         except Exception:
-            pass
+            logger.exception("Failed to classify vol regime")
 
         return result
 
@@ -152,7 +155,7 @@ class RegimeClassifier:
             else:
                 result['regime'] = 'medium'
         except Exception:
-            pass
+            logger.exception("Failed to classify correlation regime")
 
         return result
 
@@ -195,7 +198,7 @@ class RegimeClassifier:
                 elif ratio < 0.8:
                     result['gamma_direction'] = 'positive'
         except Exception:
-            pass
+            logger.exception("Failed to estimate gamma exposure")
 
         return result
 
@@ -226,7 +229,7 @@ class RegimeClassifier:
                     result['elevated'] = True
                     result['signals'].append(f'{sym} volatility spike')
         except Exception:
-            pass
+            logger.exception("Failed to assess macro event proximity")
 
         return result
 

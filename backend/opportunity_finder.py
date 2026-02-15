@@ -9,12 +9,15 @@ Identifies high-confidence trading opportunities based on:
 - Volatility analysis
 """
 
+import logging
 import yfinance as yf
 from datetime import datetime, timedelta
 from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
 import numpy as np
 import os
+
+logger = logging.getLogger(__name__)
 
 # Check if demo mode
 DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
@@ -49,7 +52,7 @@ class OpportunityFinder:
                 if opportunity and opportunity.get('confidence', 0) >= min_confidence:
                     opportunities.append(opportunity)
             except Exception as e:
-                print(f"Error analyzing {symbol}: {str(e)}")
+                logger.exception("Error analyzing %s", symbol)
                 continue
         
         # Sort by confidence and potential return
@@ -106,6 +109,7 @@ class OpportunityFinder:
             }
             
         except Exception as e:
+            logger.exception("Failed to analyze symbol %s", symbol)
             return None
     
     def _analyze_options(self, symbol, current_price, volatility):
