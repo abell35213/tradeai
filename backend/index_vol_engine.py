@@ -29,6 +29,10 @@ from vol_surface_analyzer import VolSurfaceAnalyzer
 from regime_classifier import RegimeClassifier
 from position_sizer import PositionSizer
 from risk_engine import RiskEngine
+from trade_ticket import (
+    TradeTicket, TicketLeg, EdgeMetrics, RegimeGate,
+    RiskGate, PortfolioAfter, Exits,
+)
 
 
 class IndexVolEngine:
@@ -103,9 +107,10 @@ class IndexVolEngine:
         """
         Generate a full trade ticket for an index vol credit spread.
 
-        Returns a ticket dict suitable for the ``/api/trade-ticket/index-vol``
-        endpoint, including strikes, credit, max loss, POP estimate,
-        regime snapshot, risk before/after, and an idempotency token.
+        Returns a ``TradeTicket`` instance suitable for the
+        ``/api/trade-ticket/index-vol`` endpoint, including strikes,
+        credit, max loss, POP estimate, regime snapshot, risk before/after,
+        and an idempotency token.
         """
         analysis = self.analyze(symbol)
         existing_positions = existing_positions or []
@@ -130,26 +135,67 @@ class IndexVolEngine:
             list(existing_positions) + [proposed_position]
         )
 
-        ticket = {
-            'ticket_id': str(uuid.uuid4()),
-            'symbol': symbol,
-            'strategy': spread['strategy'],
-            'expiry': spread['expiry'],
-            'strikes': spread['strikes'],
-            'wing_width': spread['wing_width'],
-            'credit': spread['credit'],
-            'max_loss': spread['max_loss'],
-            'pop_estimate': spread['pop_estimate'],
-            'regime_snapshot': analysis['regime_snapshot'],
-            'trade_gate': analysis['trade_gate'],
-            'edge_score': analysis['edge_score'],
-            'components': analysis['components'],
-            'risk_before': risk_before,
-            'risk_after': risk_after,
-            'sizing': analysis['sizing'],
-            'status': 'pending',
-            'created_at': datetime.now().isoformat(),
-        }
+        # Build structured legs
+        strikes = spread['strikes']
+        legs = []
+        if strikes.get('short'):
+            legs.append(TicketLeg(
+                type='put', side='sell',
+                strike=strikes['short'], qty=1,
+            ))
+        if strikes.get('long'):
+            legs.append(TicketLeg(
+                type='put', side='buy',
+                strike=strikes['long'], qty=1,
+            ))
+
+        # Map analysis components to edge_metrics
+        components = analysis.get('components', {})
+        edge_metrics = EdgeMetrics(
+            iv_pct=components.get('iv_rv_spread'),
+            skew_metric=components.get('skew_dislocation'),
+            term_structure=components.get('term_structure'),
+        )
+
+        # Regime gate from analysis trade_gate
+        trade_gate = analysis.get('trade_gate', {})
+        regime_gate = RegimeGate(
+            passed=trade_gate.get('passed', True),
+            reasons=trade_gate.get('reasons', []),
+        )
+
+        # Risk gate from computed risk_after
+        risk_gate = RiskGate(
+            passed=True,
+            reasons=[],
+            portfolio_after=PortfolioAfter(
+                delta=risk_after.get('portfolio_delta', 0.0),
+                vega=risk_after.get('portfolio_vega', 0.0),
+                gamma=risk_after.get('portfolio_gamma', 0.0),
+                max_loss_week=spread['max_loss'],
+            ),
+        )
+
+        confidence_score = analysis.get('edge_score', 0.0)
+
+        ticket = TradeTicket(
+            ticket_id=str(uuid.uuid4()),
+            underlying=symbol,
+            strategy=spread['strategy'],
+            expiry=spread['expiry'],
+            legs=legs,
+            width=spread['wing_width'],
+            mid_credit=spread['credit'],
+            limit_credit=spread['credit'],
+            max_loss=spread['max_loss'],
+            pop_estimate=spread['pop_estimate'],
+            edge_metrics=edge_metrics,
+            regime_gate=regime_gate,
+            risk_gate=risk_gate,
+            confidence_score=confidence_score,
+            exits=Exits(),
+            status='pending',
+        )
         return ticket
 
     # ------------------------------------------------------------------

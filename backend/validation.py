@@ -32,12 +32,10 @@ class TradeTicketRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=10)
     strategy: str = Field(..., min_length=1)
     legs: list
-    credit: float
-    max_loss: float
-    breakevens: list
-    quantity: int = Field(default=1, ge=1)
+    credit: float = 0.0
+    max_loss: float = 0.0
+    width: float = 0.0
     expiry: Optional[str] = None
-    notes: Optional[str] = None
     existing_positions: Optional[list] = Field(default=[])
 
 

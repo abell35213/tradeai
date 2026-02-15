@@ -82,10 +82,11 @@ class TestTradeTicketIndexVol:
                            json={'symbol': 'SPY'})
         ticket = resp.get_json()['ticket']
         required = [
-            'ticket_id', 'symbol', 'strategy', 'expiry', 'strikes',
-            'wing_width', 'credit', 'max_loss', 'pop_estimate',
-            'regime_snapshot', 'trade_gate', 'edge_score', 'components',
-            'risk_before', 'risk_after', 'status', 'created_at',
+            'ticket_id', 'underlying', 'strategy', 'expiry', 'dte',
+            'legs', 'width', 'mid_credit', 'limit_credit', 'max_loss',
+            'pop_estimate', 'edge_metrics', 'regime_gate', 'risk_gate',
+            'confidence_score', 'exits', 'status', 'timestamp',
+            'data_timestamp',
         ]
         for field in required:
             assert field in ticket, f'Missing field: {field}'
