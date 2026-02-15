@@ -106,7 +106,6 @@ class VolDecayAnalyzer:
                         dates.append(dt)
         except Exception:
             logger.exception("Failed to retrieve earnings_dates for ticker")
-            pass
 
         if not dates:
             try:
@@ -119,7 +118,6 @@ class VolDecayAnalyzer:
                             dates.append(col)
             except Exception:
                 logger.exception("Failed to retrieve quarterly financials dates for ticker")
-                pass
 
         return sorted(dates)
 

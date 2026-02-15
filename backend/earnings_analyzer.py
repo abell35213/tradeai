@@ -165,6 +165,7 @@ class EarningsAnalyzer:
             logger.exception("Failed to compute historical volatility for options expectations")
 
         try:
+            expirations = ticker.options
             if expirations and len(expirations) >= 1:
                 front_chain = ticker.option_chain(expirations[0])
                 if current_price and len(front_chain.calls) > 0:
@@ -226,6 +227,7 @@ class EarningsAnalyzer:
             logger.exception("Failed to analyze positioning OI data")
 
         try:
+            history = ticker.history(period='1mo')
             if len(history) >= 10:
                 recent = history['Close'].iloc[-1]
                 past = history['Close'].iloc[-10]

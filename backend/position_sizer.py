@@ -119,6 +119,7 @@ class PositionSizer:
             score_components.append(0.5)
 
         try:
+            ticker = yf.Ticker(symbol)
             expirations = ticker.options
             if expirations:
                 chain = ticker.option_chain(expirations[0])

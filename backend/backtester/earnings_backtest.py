@@ -123,7 +123,6 @@ class EarningsBacktester:
                         dates.append(dt)
         except Exception:
             logger.exception("Failed to retrieve earnings_dates for ticker")
-            pass
 
         # Fallback: use quarterly financials dates
         if not dates:
@@ -137,7 +136,6 @@ class EarningsBacktester:
                             dates.append(col)
             except Exception:
                 logger.exception("Failed to retrieve quarterly financials dates for ticker")
-                pass
 
         return sorted(dates)
 
