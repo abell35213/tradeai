@@ -8,11 +8,14 @@ Analyzes market sentiment from multiple sources including:
 - Market trends
 """
 
+import logging
 import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from textblob import TextBlob
+
+logger = logging.getLogger(__name__)
 
 class SentimentAnalyzer:
     """Analyzes sentiment for trading symbols"""
@@ -73,6 +76,7 @@ class SentimentAnalyzer:
             }
             
         except Exception as e:
+            logger.exception("Failed to analyze sentiment for symbol")
             return {
                 'error': str(e),
                 'overall_score': 0,

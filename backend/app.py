@@ -11,6 +11,7 @@ This application provides endpoints for:
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
+import logging
 import yfinance as yf
 from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
@@ -32,11 +33,19 @@ from demo_data import (
     get_mock_earnings_calendar, get_mock_earnings_snapshot,
     get_mock_vol_surface, get_mock_regime,
 )
+from validation import (
+    GreeksRequest, TradeTicketRequest, PositionSizeRequest,
+    CircuitBreakerRequest, OpportunitiesRequest, PortfolioRiskRequest,
+    IndexVolTicketRequest, ExecuteRequest,
+)
+from pydantic import ValidationError
 import os
 import uuid
 
 app = Flask(__name__)
 CORS(app)
+
+logger = logging.getLogger(__name__)
 
 # Demo mode flag (set to True when no internet access)
 DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
@@ -171,19 +180,16 @@ def get_options(symbol):
 def calculate_greeks(symbol):
     """Calculate Greeks for a specific option"""
     try:
-        data = request.json
-        spot_price = data.get('spot_price')
-        strike = data.get('strike')
-        time_to_expiry = data.get('time_to_expiry')  # in years
-        volatility = data.get('volatility')
-        risk_free_rate = data.get('risk_free_rate', 0.05)
-        option_type = data.get('option_type', 'call')
-        dividend_yield = data.get('dividend_yield', 0.0)
+        data = request.json or {}
+        try:
+            validated = GreeksRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
         
         greeks = derivatives_calc.calculate_greeks(
-            spot_price, strike, time_to_expiry, 
-            volatility, risk_free_rate, option_type,
-            q=dividend_yield,
+            validated.spot_price, validated.strike, validated.time_to_expiry,
+            validated.volatility, validated.risk_free_rate, validated.option_type,
+            q=validated.dividend_yield,
         )
         
         return jsonify({
@@ -201,11 +207,15 @@ def calculate_greeks(symbol):
 def find_opportunities():
     """Find trading opportunities based on criteria"""
     try:
-        data = request.json
-        symbols = data.get('symbols', ['SPY', 'QQQ', 'IWM'])
-        min_confidence = data.get('min_confidence', 0.6)
+        data = request.json or {}
+        try:
+            validated = OpportunitiesRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
         
-        opportunities = opportunity_finder.find_opportunities(symbols, min_confidence)
+        opportunities = opportunity_finder.find_opportunities(
+            validated.symbols, validated.min_confidence
+        )
         
         return jsonify({
             'success': True,
@@ -331,9 +341,12 @@ def get_regime():
 def get_portfolio_risk():
     """Calculate portfolio-level risk metrics"""
     try:
-        data = request.json
-        positions = data.get('positions', [])
-        risk = risk_engine.calculate_portfolio_risk(positions)
+        data = request.json or {}
+        try:
+            validated = PortfolioRiskRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
+        risk = risk_engine.calculate_portfolio_risk(validated.positions)
         return jsonify({
             'success': True,
             'risk': risk,
@@ -352,29 +365,27 @@ def get_portfolio_risk():
 def calculate_position_size():
     """Calculate recommended position size"""
     try:
-        data = request.json
-        symbol = data.get('symbol')
-        confidence_score = data.get('confidence_score', 3)
-        historical_edge = data.get('historical_edge', 0.5)
-        implied_edge = data.get('implied_edge')
-        base_risk = data.get('base_risk')
+        data = request.json or {}
+        try:
+            validated = PositionSizeRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
 
-        if symbol:
+        if validated.symbol:
             result = position_sizer.size_from_symbol(
-                symbol=symbol,
-                confidence_score=confidence_score,
-                historical_edge=historical_edge,
-                implied_edge=implied_edge,
-                base_risk=base_risk,
+                symbol=validated.symbol,
+                confidence_score=validated.confidence_score,
+                historical_edge=validated.historical_edge,
+                implied_edge=validated.implied_edge,
+                base_risk=validated.base_risk,
             )
         else:
-            liquidity_score = data.get('liquidity_score', 0.5)
             result = position_sizer.calculate_size(
-                confidence_score=confidence_score,
-                liquidity_score=liquidity_score,
-                historical_edge=historical_edge,
-                implied_edge=implied_edge,
-                base_risk=base_risk,
+                confidence_score=validated.confidence_score,
+                liquidity_score=validated.liquidity_score,
+                historical_edge=validated.historical_edge,
+                implied_edge=validated.implied_edge,
+                base_risk=validated.base_risk,
             )
 
         return jsonify({
@@ -489,27 +500,25 @@ def check_circuit_breaker():
     """Check all kill-switches and return trading permission."""
     try:
         data = request.json or {}
-        weekly_pnl_pct = data.get('weekly_pnl_pct', 0.0)
-        vix_percentile = data.get('vix_percentile', 50.0)
-        vix_day_change_pct = data.get('vix_day_change_pct', 0.0)
+        try:
+            validated = CircuitBreakerRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
 
         # Attempt to get calendar events from data provider
         try:
             calendar_events = market_data_provider.get_calendar_events()
         except Exception:
+            logger.exception("Failed to get calendar events from data provider")
             calendar_events = []
 
-        # Regime info (optional)
-        regime_label = data.get('regime_label')
-        macro_proximity_elevated = data.get('macro_proximity_elevated')
-
         result = circuit_breaker.check_all(
-            weekly_pnl_pct=weekly_pnl_pct,
-            vix_percentile=vix_percentile,
-            vix_day_change_pct=vix_day_change_pct,
+            weekly_pnl_pct=validated.weekly_pnl_pct,
+            vix_percentile=validated.vix_percentile,
+            vix_day_change_pct=validated.vix_day_change_pct,
             calendar_events=calendar_events,
-            regime_label=regime_label,
-            macro_proximity_elevated=macro_proximity_elevated,
+            regime_label=validated.regime_label,
+            macro_proximity_elevated=validated.macro_proximity_elevated,
         )
         return jsonify({'success': True, **result})
     except Exception as e:
@@ -536,19 +545,23 @@ def regime_should_trade():
 def submit_trade_ticket():
     """Build a trade ticket and evaluate portfolio risk after trade."""
     try:
-        data = request.json
+        data = request.json or {}
+        try:
+            validated = TradeTicketRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
         ticket = build_trade_ticket(
-            symbol=data['symbol'],
-            strategy=data['strategy'],
-            legs=data['legs'],
-            credit=data['credit'],
-            max_loss=data['max_loss'],
-            breakevens=data['breakevens'],
-            quantity=data.get('quantity', 1),
-            expiry=data.get('expiry'),
-            notes=data.get('notes'),
+            symbol=validated.symbol,
+            strategy=validated.strategy,
+            legs=validated.legs,
+            credit=validated.credit,
+            max_loss=validated.max_loss,
+            breakevens=validated.breakevens,
+            quantity=validated.quantity,
+            expiry=validated.expiry,
+            notes=validated.notes,
         )
-        existing = data.get('existing_positions', [])
+        existing = validated.existing_positions
         ticket = evaluate_ticket(ticket, risk_engine, existing)
         return jsonify({'success': True, 'ticket': ticket})
     except Exception as e:
@@ -604,8 +617,12 @@ def generate_index_vol_ticket():
     """
     try:
         data = request.json or {}
-        symbol = data.get('symbol', 'SPY')
-        existing = data.get('existing_positions', [])
+        try:
+            validated = IndexVolTicketRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
+        symbol = validated.symbol
+        existing = validated.existing_positions
 
         if DEMO_MODE:
             from index_vol_engine import IndexVolEngine as _IVE
@@ -681,34 +698,33 @@ def execute_trade():
     """
     try:
         data = request.json or {}
-        ticket_id = data.get('ticket_id')
-        action = data.get('action', '').lower()
-
-        if not ticket_id or action not in ('approve', 'reject'):
+        try:
+            validated = ExecuteRequest(**data)
+        except ValidationError as ve:
             return jsonify({
                 'success': False,
                 'error': 'ticket_id and action (approve|reject) are required',
             }), 400
 
-        ticket = _pending_tickets.get(ticket_id)
+        ticket = _pending_tickets.get(validated.ticket_id)
         if ticket is None:
             return jsonify({
                 'success': False,
-                'error': f'Ticket {ticket_id} not found',
+                'error': f'Ticket {validated.ticket_id} not found',
             }), 404
 
         if ticket.get('status') != 'pending':
             return jsonify({
                 'success': False,
-                'error': f'Ticket {ticket_id} is already {ticket.get("status")}',
+                'error': f'Ticket {validated.ticket_id} is already {ticket.get("status")}',
             }), 409
 
-        ticket['status'] = 'approved' if action == 'approve' else 'rejected'
+        ticket['status'] = 'approved' if validated.action == 'approve' else 'rejected'
         ticket['executed_at'] = datetime.now().isoformat()
 
         _execution_log.append({
-            'ticket_id': ticket_id,
-            'action': action,
+            'ticket_id': validated.ticket_id,
+            'action': validated.action,
             'timestamp': ticket['executed_at'],
             'symbol': ticket.get('symbol'),
             'strategy': ticket.get('strategy'),

@@ -16,11 +16,14 @@ Produces a composite edge score and trade recommendation for defined-risk
 credit spread strategies.
 """
 
+import logging
 import math
 import uuid
 from datetime import datetime
 
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 from vol_surface_analyzer import VolSurfaceAnalyzer
 from regime_classifier import RegimeClassifier
@@ -390,7 +393,7 @@ class IndexVolEngine:
                     credit = round(max(short_bid - long_ask, 0.0), 2)
                     max_loss = round((wing_width - credit) * 100, 2)
         except Exception:
-            pass
+            logger.exception("Failed to build spread params for %s", symbol)
 
         # Fallback if no live data
         if short_strike is None:

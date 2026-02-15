@@ -12,11 +12,15 @@ Calculates portfolio-level risk metrics:
 Designed for risk-adjusted capital allocation in earnings volatility strategies.
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 from collections import defaultdict
+from market_cache import get_ticker_info, download_tickers
+
+logger = logging.getLogger(__name__)
 
 
 class RiskEngine:
@@ -137,9 +141,10 @@ class RiskEngine:
         if symbol in self.SECTOR_MAP:
             return self.SECTOR_MAP[symbol]
         try:
-            info = yf.Ticker(symbol).info
+            info = get_ticker_info(symbol)
             return (info.get('sector') or 'other').lower()
         except Exception:
+            logger.exception("Failed to get sector for %s", symbol)
             return 'other'
 
     # ------------------------------------------------------------------
@@ -160,7 +165,7 @@ class RiskEngine:
             return result
 
         try:
-            data = yf.download(symbols, period='3mo', progress=False)
+            data = download_tickers(symbols, period='3mo')
             if data.empty:
                 return result
 
@@ -181,7 +186,7 @@ class RiskEngine:
             else:
                 result['level'] = 'low'
         except Exception:
-            pass
+            logger.exception("Failed to calculate correlation concentration")
 
         return result
 
@@ -224,7 +229,7 @@ class RiskEngine:
             elif cluster_count >= 1:
                 result['level'] = 'medium'
         except Exception:
-            pass
+            logger.exception("Failed to assess earnings cluster risk")
 
         return result
 

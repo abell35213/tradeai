@@ -14,6 +14,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EarningsBacktester:
@@ -119,7 +122,7 @@ class EarningsBacktester:
                     else:
                         dates.append(dt)
         except Exception:
-            pass
+            logger.exception("Failed to retrieve earnings_dates for ticker")
 
         # Fallback: use quarterly financials dates
         if not dates:
@@ -132,7 +135,7 @@ class EarningsBacktester:
                         else:
                             dates.append(col)
             except Exception:
-                pass
+                logger.exception("Failed to retrieve quarterly financials dates for ticker")
 
         return sorted(dates)
 
@@ -194,6 +197,7 @@ class EarningsBacktester:
             }
 
         except Exception:
+            logger.exception("Failed to simulate single earnings event")
             return None
 
     def _classify_market_cap(self, market_cap):

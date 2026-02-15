@@ -16,6 +16,9 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 from backtester.earnings_backtest import EarningsBacktester
 
@@ -90,6 +93,7 @@ class SetupPerformanceTracker:
                         setup_drift[setup_type].append(event['post_earnings_drift_5d'])
 
             except Exception:
+                logger.exception("Failed to process symbol %s", symbol)
                 continue
 
         # Build summary per setup

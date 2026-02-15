@@ -13,12 +13,15 @@ Analyzes volatility surface characteristics:
 Designed as the vol-intelligence layer for a risk-adjusted capital allocation engine.
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 import math
 from scipy.stats import norm
+
+logger = logging.getLogger(__name__)
 
 
 class VolSurfaceAnalyzer:
@@ -108,6 +111,7 @@ class VolSurfaceAnalyzer:
                     ivs.append(round(atm_iv, 4))
                     exp_labels.append(exp_date)
                 except Exception:
+                    logger.exception("Failed to get ATM IV for expiration %s", exp_date)
                     continue
 
             if len(ivs) < 2:
@@ -142,7 +146,7 @@ class VolSurfaceAnalyzer:
             else:
                 result['signal'] = 'Flat term structure'
         except Exception:
-            pass
+            logger.exception("Failed to analyze term structure for %s", symbol)
 
         return result
 
@@ -202,7 +206,7 @@ class VolSurfaceAnalyzer:
             else:
                 result['signal'] = 'Normal skew'
         except Exception:
-            pass
+            logger.exception("Failed to analyze skew for %s", symbol)
 
         return result
 
@@ -270,7 +274,7 @@ class VolSurfaceAnalyzer:
             else:
                 result['signal'] = 'Unable to compute forward vol (negative variance or zero dt)'
         except Exception:
-            pass
+            logger.exception("Failed to calculate forward vol for %s", symbol)
 
         return result
 
@@ -341,7 +345,7 @@ class VolSurfaceAnalyzer:
                         else:
                             result['signal'] = 'Symbol IV in line with sector'
         except Exception:
-            pass
+            logger.exception("Failed to compare earnings IV to sector for %s", symbol)
 
         return result
 
@@ -386,7 +390,7 @@ class VolSurfaceAnalyzer:
             else:
                 result['signal'] = 'Skew within normal range'
         except Exception:
-            pass
+            logger.exception("Failed to compute skew percentile for %s", symbol)
 
         return result
 
@@ -445,6 +449,7 @@ class VolSurfaceAnalyzer:
                             p_atm = (p_calls['strike'] - p_price).abs().idxmin()
                             peer_ivs[peer] = round(float(p_calls.loc[p_atm, 'impliedVolatility']), 4)
                 except Exception:
+                    logger.exception("Failed to get IV for peer %s", peer)
                     continue
 
             result['peer_ivs'] = peer_ivs
@@ -465,7 +470,7 @@ class VolSurfaceAnalyzer:
                 else:
                     result['signal'] = 'IV in line with sector peers'
         except Exception:
-            pass
+            logger.exception("Failed to detect cross-sectional dislocations for %s", symbol)
 
         return result
 

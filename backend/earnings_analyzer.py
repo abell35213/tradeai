@@ -11,8 +11,11 @@ Provides:
 """
 
 from datetime import datetime, timedelta
+import logging
 import yfinance as yf
 import math
+
+logger = logging.getLogger(__name__)
 
 
 class EarningsAnalyzer:
@@ -55,6 +58,7 @@ class EarningsAnalyzer:
                             'market_cap': info.get('marketCap'),
                         })
             except Exception:
+                logger.exception("Failed to fetch earnings data for %s", sym)
                 continue
 
         return calendar
@@ -158,7 +162,7 @@ class EarningsAnalyzer:
                 hist_vol = float(returns.std() * math.sqrt(252))
                 result['historical_volatility'] = round(hist_vol, 4)
         except Exception:
-            pass
+            logger.exception("Failed to compute historical volatility for options expectations")
 
         try:
             expirations = ticker.options
@@ -182,7 +186,7 @@ class EarningsAnalyzer:
                 if result['front_iv'] and result['back_iv']:
                     result['iv_term_spread'] = round(result['front_iv'] - result['back_iv'], 4)
         except Exception:
-            pass
+            logger.exception("Failed to analyze options expectations")
 
         if result['atm_iv'] and result['historical_volatility']:
             ratio = result['atm_iv'] / result['historical_volatility'] if result['historical_volatility'] > 0 else None
@@ -220,7 +224,7 @@ class EarningsAnalyzer:
                 if result['call_oi'] > 0:
                     result['put_call_oi_ratio'] = round(result['put_oi'] / result['call_oi'], 4)
         except Exception:
-            pass
+            logger.exception("Failed to analyze positioning OI data")
 
         try:
             history = ticker.history(period='1mo')
@@ -236,7 +240,7 @@ class EarningsAnalyzer:
                 else:
                     result['drift_direction'] = 'flat'
         except Exception:
-            pass
+            logger.exception("Failed to analyze price drift")
 
         pc = result['put_call_oi_ratio']
         drift_dir = result['drift_direction']
