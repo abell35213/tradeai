@@ -1,7 +1,8 @@
 """Tests for the derivatives calculator – Black-Scholes with dividend yield,
 vega_per_1pct / rho_per_1pct naming, and IV solver consistency."""
 
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 import math

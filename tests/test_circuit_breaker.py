@@ -1,6 +1,7 @@
 """Tests for the circuit breaker module."""
 
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from datetime import datetime, timedelta
