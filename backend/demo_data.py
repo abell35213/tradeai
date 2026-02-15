@@ -503,3 +503,92 @@ def get_mock_earnings_calendar(year, month):
 def get_mock_earnings_snapshot(symbol):
     """Get mock earnings snapshot for a symbol"""
     return MOCK_EARNINGS_SNAPSHOTS.get(symbol, MOCK_EARNINGS_SNAPSHOTS['AAPL'])
+
+
+# ------------------------------------------------------------------
+# Mock index vol engine data
+# ------------------------------------------------------------------
+
+MOCK_VOL_SURFACE = {
+    'SPY': {
+        'symbol': 'SPY',
+        'term_structure': {
+            'shape': 'contango',
+            'expirations': ['2026-03-20', '2026-04-17', '2026-05-15'],
+            'atm_ivs': [0.16, 0.17, 0.18],
+            'distortion_detected': False,
+            'signal': 'Contango — normal term structure',
+        },
+        'skew': {
+            'put_skew_iv': 0.19,
+            'call_skew_iv': 0.14,
+            'skew_spread': 0.05,
+            'signal': 'Normal skew',
+        },
+        'forward_vol': {
+            'spot_vol': 0.16,
+            'forward_vol': 0.19,
+            'ratio': 1.19,
+            'signal': 'Forward vol in line with spot',
+        },
+        'sector_iv_comparison': {
+            'symbol_iv': 0.16,
+            'sector_etf': 'SPY',
+            'sector_iv': 0.16,
+            'iv_premium': 1.0,
+            'signal': 'Symbol IV in line with sector',
+        },
+        'skew_percentile': {
+            'current_skew': -0.12,
+            'percentile': 45.0,
+            'signal': 'Skew within normal range',
+        },
+        'cross_sectional_dislocations': {
+            'symbol_iv': 0.16,
+            'peer_ivs': {},
+            'iv_rank_in_sector': None,
+            'dislocation_detected': False,
+            'signal': 'Insufficient data',
+        },
+        'timestamp': '2026-02-14T16:45:00',
+    },
+}
+
+MOCK_REGIME = {
+    'vol_regime': 'compressed',
+    'correlation_regime': 'medium',
+    'risk_appetite': 'risk_on',
+    'details': {
+        'volatility': {
+            'regime': 'compressed',
+            'vix_current': 14.5,
+            'vix_percentile': 22.0,
+            'vix_sma_20': 15.2,
+        },
+        'correlation': {
+            'regime': 'medium',
+            'avg_correlation': 0.42,
+            'sector_count': 9,
+        },
+        'gamma_exposure': {
+            'gamma_direction': 'positive',
+            'put_call_oi_ratio': 0.72,
+            'total_oi': 12500000,
+        },
+        'macro_proximity': {
+            'elevated': False,
+            'signals': [],
+        },
+    },
+    'timestamp': '2026-02-14T16:45:00',
+}
+
+
+def get_mock_vol_surface(symbol):
+    """Get mock vol surface data for a symbol."""
+    return MOCK_VOL_SURFACE.get(symbol, MOCK_VOL_SURFACE['SPY'])
+
+
+def get_mock_regime():
+    """Get mock regime data."""
+    return MOCK_REGIME

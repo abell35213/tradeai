@@ -518,3 +518,40 @@
   color: #555;
   margin-top: 8px;
 }
+
+/* Trade Tickets Styles */
+.ticket-item {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  border-left: 4px solid #2a5298;
+}
+
+.ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ticket-symbol {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #1e3c72;
+}
+
+.ticket-gate {
+  color: white;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.ticket-edge {
+  font-size: 1.2em;
+  font-weight: bold;
+}

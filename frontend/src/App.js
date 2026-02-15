@@ -5,6 +5,7 @@ import OpportunityFinder from './components/OpportunityFinder';
 import GreeksCalculator from './components/GreeksCalculator';
 import RiskMetrics from './components/RiskMetrics';
 import EarningsPlaybook from './components/EarningsPlaybook';
+import TradeTickets from './components/TradeTickets';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -49,6 +50,12 @@ function App() {
         >
           Earnings Playbook
         </button>
+        <button 
+          className={`tab ${activeTab === 'tickets' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tickets')}
+        >
+          Trade Tickets
+        </button>
       </div>
 
       <div className="main-content">
@@ -57,6 +64,7 @@ function App() {
         {activeTab === 'greeks' && <GreeksCalculator apiUrl={API_BASE_URL} />}
         {activeTab === 'risk' && <RiskMetrics apiUrl={API_BASE_URL} />}
         {activeTab === 'earnings' && <EarningsPlaybook apiUrl={API_BASE_URL} />}
+        {activeTab === 'tickets' && <TradeTickets apiUrl={API_BASE_URL} />}
       </div>
 
       <footer style={{ textAlign: 'center', color: 'white', marginTop: '40px', padding: '20px' }}>
