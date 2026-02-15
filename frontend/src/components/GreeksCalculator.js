@@ -149,8 +149,8 @@ function GreeksCalculator({ apiUrl }) {
             </div>
             
             <div className="metric-item">
-              <div className="metric-label">Vega (ν)</div>
-              <div className="metric-value">{greeks.vega?.toFixed(4)}</div>
+              <div className="metric-label">Vega (ν) per 1%</div>
+              <div className="metric-value">{greeks.vega_per_1pct?.toFixed(4)}</div>
               <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }}>
                 Price change per 1% vol
               </div>
@@ -165,8 +165,8 @@ function GreeksCalculator({ apiUrl }) {
             </div>
             
             <div className="metric-item">
-              <div className="metric-label">Rho (ρ)</div>
-              <div className="metric-value">{greeks.rho?.toFixed(4)}</div>
+              <div className="metric-label">Rho (ρ) per 1%</div>
+              <div className="metric-value">{greeks.rho_per_1pct?.toFixed(4)}</div>
               <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }}>
                 Price change per 1% rate
               </div>
@@ -178,9 +178,9 @@ function GreeksCalculator({ apiUrl }) {
             <ul style={{ marginBottom: 0, paddingLeft: '20px' }}>
               <li><strong>Delta:</strong> Shows directional exposure. {Math.abs(greeks.delta) > 0.5 ? 'High' : 'Low'} sensitivity to price movements.</li>
               <li><strong>Gamma:</strong> Measures delta acceleration. {greeks.gamma > 0.01 ? 'High' : 'Low'} convexity risk.</li>
-              <li><strong>Vega:</strong> {greeks.vega > 0.1 ? 'Significant' : 'Moderate'} exposure to volatility changes.</li>
+              <li><strong>Vega:</strong> {greeks.vega_per_1pct > 0.1 ? 'Significant' : 'Moderate'} exposure to volatility changes.</li>
               <li><strong>Theta:</strong> Time decay of ${Math.abs(greeks.theta).toFixed(2)} per day.</li>
-              <li><strong>Rho:</strong> {Math.abs(greeks.rho) > 0.1 ? 'Notable' : 'Limited'} interest rate sensitivity.</li>
+              <li><strong>Rho:</strong> {Math.abs(greeks.rho_per_1pct) > 0.1 ? 'Notable' : 'Limited'} interest rate sensitivity.</li>
             </ul>
           </div>
         </div>

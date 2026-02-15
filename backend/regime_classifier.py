@@ -268,3 +268,42 @@ class RegimeClassifier:
         elif risk_on_signals >= 3:
             return 'risk_on'
         return 'neutral'
+
+    # ------------------------------------------------------------------
+    # Trade gate
+    # ------------------------------------------------------------------
+
+    def should_trade(self, classification=None):
+        """
+        Hard gate: return False if regime is *stressed* **or** macro
+        proximity is elevated.
+
+        Parameters
+        ----------
+        classification : dict or None
+            Pre-computed output of ``classify()``.  If *None* the method
+            will call ``classify()`` internally.
+
+        Returns
+        -------
+        dict with keys:
+            - allowed (bool)
+            - reasons (list[str])
+        """
+        if classification is None:
+            classification = self.classify()
+
+        reasons = []
+
+        vol_regime = classification.get('vol_regime', '')
+        if vol_regime == 'stressed':
+            reasons.append('Volatility regime is stressed')
+
+        macro = classification.get('details', {}).get('macro_proximity', {})
+        if macro.get('elevated', False):
+            reasons.append('Macro-event proximity is elevated')
+
+        return {
+            'allowed': len(reasons) == 0,
+            'reasons': reasons,
+        }
