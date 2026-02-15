@@ -20,6 +20,9 @@ from regime_classifier import RegimeClassifier
 from risk_engine import RiskEngine
 from position_sizer import PositionSizer
 from vol_surface_analyzer import VolSurfaceAnalyzer
+from market_data_provider import YFinanceDataProvider
+from circuit_breaker import CircuitBreaker
+from trade_ticket import build_trade_ticket, evaluate_ticket
 from backtester.earnings_backtest import EarningsBacktester
 from backtester.vol_decay_analysis import VolDecayAnalyzer
 from backtester.setup_performance import SetupPerformanceTracker
@@ -41,6 +44,8 @@ regime_classifier = RegimeClassifier()
 risk_engine = RiskEngine()
 position_sizer = PositionSizer()
 vol_surface_analyzer = VolSurfaceAnalyzer()
+market_data_provider = YFinanceDataProvider()
+circuit_breaker = CircuitBreaker()
 earnings_backtester = EarningsBacktester()
 vol_decay_analyzer = VolDecayAnalyzer()
 setup_tracker = SetupPerformanceTracker(earnings_analyzer=earnings_analyzer)
@@ -156,10 +161,12 @@ def calculate_greeks(symbol):
         volatility = data.get('volatility')
         risk_free_rate = data.get('risk_free_rate', 0.05)
         option_type = data.get('option_type', 'call')
+        dividend_yield = data.get('dividend_yield', 0.0)
         
         greeks = derivatives_calc.calculate_greeks(
             spot_price, strike, time_to_expiry, 
-            volatility, risk_free_rate, option_type
+            volatility, risk_free_rate, option_type,
+            q=dividend_yield,
         )
         
         return jsonify({
@@ -455,6 +462,80 @@ def get_sharpe_by_setup():
             'success': False,
             'error': str(e)
         }), 500
+
+# ------------------------------------------------------------------
+# Circuit breaker
+# ------------------------------------------------------------------
+
+@app.route('/api/circuit-breaker', methods=['POST'])
+def check_circuit_breaker():
+    """Check all kill-switches and return trading permission."""
+    try:
+        data = request.json or {}
+        weekly_pnl_pct = data.get('weekly_pnl_pct', 0.0)
+        vix_percentile = data.get('vix_percentile', 50.0)
+        vix_day_change_pct = data.get('vix_day_change_pct', 0.0)
+
+        # Attempt to get calendar events from data provider
+        try:
+            calendar_events = market_data_provider.get_calendar_events()
+        except Exception:
+            calendar_events = []
+
+        # Regime info (optional)
+        regime_label = data.get('regime_label')
+        macro_proximity_elevated = data.get('macro_proximity_elevated')
+
+        result = circuit_breaker.check_all(
+            weekly_pnl_pct=weekly_pnl_pct,
+            vix_percentile=vix_percentile,
+            vix_day_change_pct=vix_day_change_pct,
+            calendar_events=calendar_events,
+            regime_label=regime_label,
+            macro_proximity_elevated=macro_proximity_elevated,
+        )
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ------------------------------------------------------------------
+# Regime trade gate
+# ------------------------------------------------------------------
+
+@app.route('/api/regime/should-trade', methods=['GET'])
+def regime_should_trade():
+    """Check whether regime conditions allow trading."""
+    try:
+        result = regime_classifier.should_trade()
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ------------------------------------------------------------------
+# Trade ticket
+# ------------------------------------------------------------------
+
+@app.route('/api/trade-ticket', methods=['POST'])
+def submit_trade_ticket():
+    """Build a trade ticket and evaluate portfolio risk after trade."""
+    try:
+        data = request.json
+        ticket = build_trade_ticket(
+            symbol=data['symbol'],
+            strategy=data['strategy'],
+            legs=data['legs'],
+            credit=data['credit'],
+            max_loss=data['max_loss'],
+            breakevens=data['breakevens'],
+            quantity=data.get('quantity', 1),
+            expiry=data.get('expiry'),
+            notes=data.get('notes'),
+        )
+        existing = data.get('existing_positions', [])
+        ticket = evaluate_ticket(ticket, risk_engine, existing)
+        return jsonify({'success': True, 'ticket': ticket})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("Starting Derivatives Trading Sentiment Tracker API...")
