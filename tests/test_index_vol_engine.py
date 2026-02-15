@@ -221,6 +221,15 @@ class TestEdgeToConfidence:
     def test_mid_edge(self):
         assert IndexVolEngine._edge_to_confidence(0.5) == 3.0
 
+    def test_below_zero_clamps(self):
+        assert IndexVolEngine._edge_to_confidence(-0.5) == 1.0
+
+    def test_above_one_clamps(self):
+        assert IndexVolEngine._edge_to_confidence(1.5) == 5.0
+
+    def test_quarter_edge(self):
+        assert IndexVolEngine._edge_to_confidence(0.25) == 2.0
+
 
 # ------------------------------------------------------------------
 # Spread params builder

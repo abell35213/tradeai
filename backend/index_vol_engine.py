@@ -20,6 +20,8 @@ import math
 import uuid
 from datetime import datetime
 
+import yfinance as yf
+
 from vol_surface_analyzer import VolSurfaceAnalyzer
 from regime_classifier import RegimeClassifier
 from position_sizer import PositionSizer
@@ -340,17 +342,6 @@ class IndexVolEngine:
         Uses vol surface data to pick strikes and estimate credit/max-loss.
         When live data is unavailable, uses reasonable approximations.
         """
-        vol_data = analysis.get('components', {})
-        ts = analysis.get('regime_snapshot', {}).get('details', {}).get(
-            'volatility', {}
-        )
-
-        # Use ATM IVs from the vol surface if available
-        term_ivs = []
-        vol_surface_raw = self.vol_surface.analyze(symbol) if not analysis else None
-        # Re-use analysis data
-        # We'll approximate strikes from current price range
-
         # Default spread parameters (will be overridden by live data)
         strategy = 'defined-risk credit spread'
         expiry = None
@@ -361,7 +352,6 @@ class IndexVolEngine:
         max_loss = 0.0
 
         try:
-            import yfinance as yf
             ticker = yf.Ticker(symbol)
             info = ticker.info
             current_price = info.get('currentPrice') or info.get('regularMarketPrice')
