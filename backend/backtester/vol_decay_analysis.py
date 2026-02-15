@@ -15,6 +15,9 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class VolDecayAnalyzer:
@@ -102,6 +105,7 @@ class VolDecayAnalyzer:
                     else:
                         dates.append(dt)
         except Exception:
+            logger.exception("Failed to retrieve earnings_dates for ticker")
             pass
 
         if not dates:
@@ -114,6 +118,7 @@ class VolDecayAnalyzer:
                         else:
                             dates.append(col)
             except Exception:
+                logger.exception("Failed to retrieve quarterly financials dates for ticker")
                 pass
 
         return sorted(dates)

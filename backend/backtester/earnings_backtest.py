@@ -14,6 +14,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EarningsBacktester:
@@ -119,6 +122,7 @@ class EarningsBacktester:
                     else:
                         dates.append(dt)
         except Exception:
+            logger.exception("Failed to retrieve earnings_dates for ticker")
             pass
 
         # Fallback: use quarterly financials dates
@@ -132,6 +136,7 @@ class EarningsBacktester:
                         else:
                             dates.append(col)
             except Exception:
+                logger.exception("Failed to retrieve quarterly financials dates for ticker")
                 pass
 
         return sorted(dates)
