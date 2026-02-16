@@ -92,3 +92,14 @@ class ExecuteRequest(BaseModel):
         if v.lower() not in ('approve', 'reject'):
             raise ValueError("action must be 'approve' or 'reject'")
         return v.lower()
+
+
+class TradeApproveRequest(BaseModel):
+    """Schema for POST /api/trade-approve."""
+    ticket_id: str = Field(..., min_length=1)
+
+
+class TradeRejectRequest(BaseModel):
+    """Schema for POST /api/trade-reject."""
+    ticket_id: str = Field(..., min_length=1)
+    reason: Optional[str] = None
