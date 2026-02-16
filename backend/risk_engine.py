@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 class RiskEngine:
     """Portfolio-level risk calculator for options/earnings strategies."""
 
+    # Default risk limits
+    MAX_TRADE_RISK_PCT = 1.5       # Max risk per trade as % of equity
+    MAX_WEEKLY_LOSS_PCT = 5.0      # Max weekly sum of worst-case losses as % of equity
+    KILL_SWITCH_DRAWDOWN_PCT = 3.0 # Weekly realized drawdown kill switch as % of equity
+
     # Sector mapping for common large-cap tickers
     SECTOR_MAP = {
         'AAPL': 'tech', 'MSFT': 'tech', 'GOOGL': 'tech', 'AMZN': 'tech',
@@ -130,6 +135,102 @@ class RiskEngine:
             'gamma_convexity': gamma_convexity,
             'earnings_cluster_detail': earnings_cluster,
             'timestamp': datetime.now().isoformat(),
+        }
+
+    # ------------------------------------------------------------------
+    # Ticket-level risk evaluation (before / after)
+    # ------------------------------------------------------------------
+
+    def evaluate_ticket_risk(
+        self,
+        ticket_max_loss,
+        ticket_position,
+        existing_positions,
+        equity=100_000.0,
+        weekly_realized_pnl=0.0,
+        existing_weekly_max_losses=0.0,
+    ):
+        """
+        Evaluate risk for a proposed trade ticket against current portfolio.
+
+        Parameters
+        ----------
+        ticket_max_loss : float
+            Maximum possible loss for this trade (positive number).
+        ticket_position : dict
+            Aggregated position dict for the new ticket with keys:
+            ``symbol``, ``delta``, ``vega``, ``gamma``, ``notional``,
+            ``earnings_date``, ``expiry_bucket``.
+        existing_positions : list[dict]
+            Current portfolio positions.
+        equity : float
+            Total account equity (default 100 000).
+        weekly_realized_pnl : float
+            Realized P&L this week (negative means loss).
+        existing_weekly_max_losses : float
+            Sum of max-loss values for trades already opened this week.
+
+        Returns
+        -------
+        dict with keys:
+            portfolio_delta_before, portfolio_vega_before, portfolio_gamma_before,
+            portfolio_delta_after, portfolio_vega_after, portfolio_gamma_after,
+            max_loss_trade, max_loss_week, sector_concentration,
+            risk_limits_pass (bool), reasons (list[str]).
+        """
+        risk_before = self.calculate_portfolio_risk(existing_positions)
+
+        all_positions = list(existing_positions) + [ticket_position]
+        risk_after = self.calculate_portfolio_risk(all_positions)
+
+        max_loss_trade = float(ticket_max_loss)
+        max_loss_week = float(existing_weekly_max_losses) + max_loss_trade
+
+        reasons = []
+        passed = True
+
+        # 1. Max risk per trade: capped at MAX_TRADE_RISK_PCT of equity
+        if equity > 0:
+            trade_risk_pct = max_loss_trade / equity * 100
+            if trade_risk_pct > self.MAX_TRADE_RISK_PCT:
+                passed = False
+                reasons.append(
+                    f"Trade max loss {trade_risk_pct:.1f}% exceeds "
+                    f"{self.MAX_TRADE_RISK_PCT}% of equity"
+                )
+
+        # 2. Max weekly sum of worst-case losses: MAX_WEEKLY_LOSS_PCT
+        if equity > 0:
+            week_risk_pct = max_loss_week / equity * 100
+            if week_risk_pct > self.MAX_WEEKLY_LOSS_PCT:
+                passed = False
+                reasons.append(
+                    f"Weekly max loss {week_risk_pct:.1f}% exceeds "
+                    f"{self.MAX_WEEKLY_LOSS_PCT}% of equity"
+                )
+
+        # 3. Kill switch: weekly realized drawdown > KILL_SWITCH_DRAWDOWN_PCT
+        if equity > 0 and weekly_realized_pnl < 0:
+            dd_pct = abs(weekly_realized_pnl) / equity * 100
+            if dd_pct > self.KILL_SWITCH_DRAWDOWN_PCT:
+                passed = False
+                reasons.append(
+                    f"Weekly realized drawdown {dd_pct:.1f}% exceeds "
+                    f"{self.KILL_SWITCH_DRAWDOWN_PCT}% kill switch"
+                )
+
+        return {
+            'portfolio_delta_before': risk_before.get('portfolio_delta', 0.0),
+            'portfolio_vega_before': risk_before.get('portfolio_vega', 0.0),
+            'portfolio_gamma_before': risk_before.get('portfolio_gamma', 0.0),
+            'portfolio_delta_after': risk_after.get('portfolio_delta', 0.0),
+            'portfolio_vega_after': risk_after.get('portfolio_vega', 0.0),
+            'portfolio_gamma_after': risk_after.get('portfolio_gamma', 0.0),
+            'max_loss_trade': round(max_loss_trade, 2),
+            'max_loss_week': round(max_loss_week, 2),
+            'sector_concentration': risk_after.get('sector_concentration', {}),
+            'risk_limits_pass': passed,
+            'reasons': reasons,
         }
 
     # ------------------------------------------------------------------

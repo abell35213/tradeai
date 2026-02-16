@@ -564,7 +564,12 @@ def submit_trade_ticket():
             expiry=validated.expiry,
         )
         existing = validated.existing_positions
-        ticket = evaluate_ticket(ticket, risk_engine, existing)
+        ticket = evaluate_ticket(
+            ticket, risk_engine, existing,
+            equity=validated.equity,
+            weekly_realized_pnl=validated.weekly_realized_pnl,
+            existing_weekly_max_losses=validated.existing_weekly_max_losses,
+        )
         return jsonify({'success': True, 'ticket': ticket.model_dump()})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -636,13 +641,17 @@ def generate_index_vol_ticket():
             edge_score = engine._composite_edge(components)
             pass_fail = engine._evaluate_gate(edge_score, trade_gate, components)
 
-            risk_before = risk_engine.calculate_portfolio_risk(existing)
-            risk_after = risk_engine.calculate_portfolio_risk(
-                list(existing) + [{
+            risk_result = risk_engine.evaluate_ticket_risk(
+                ticket_max_loss=375.0,
+                ticket_position={
                     'symbol': symbol, 'delta': -0.30, 'vega': -0.10,
                     'gamma': -0.01, 'notional': 500,
                     'earnings_date': None, 'expiry_bucket': '7-30d',
-                }]
+                },
+                existing_positions=existing,
+                equity=validated.equity,
+                weekly_realized_pnl=validated.weekly_realized_pnl,
+                existing_weekly_max_losses=validated.existing_weekly_max_losses,
             )
             ticket = TradeTicket(
                 ticket_id=str(uuid.uuid4()),
@@ -669,13 +678,14 @@ def generate_index_vol_ticket():
                     reasons=pass_fail.get('reasons', []),
                 ),
                 risk_gate=RiskGate(
-                    passed=True,
-                    reasons=[],
+                    passed=risk_result.get('risk_limits_pass', True),
+                    reasons=risk_result.get('reasons', []),
                     portfolio_after=PortfolioAfter(
-                        delta=risk_after.get('portfolio_delta', 0.0),
-                        vega=risk_after.get('portfolio_vega', 0.0),
-                        gamma=risk_after.get('portfolio_gamma', 0.0),
-                        max_loss_week=375.0,
+                        delta=risk_result.get('portfolio_delta_after', 0.0),
+                        vega=risk_result.get('portfolio_vega_after', 0.0),
+                        gamma=risk_result.get('portfolio_gamma_after', 0.0),
+                        max_loss_trade=risk_result.get('max_loss_trade', 375.0),
+                        max_loss_week=risk_result.get('max_loss_week', 375.0),
                     ),
                 ),
                 confidence_score=round(edge_score, 4),
@@ -701,6 +711,7 @@ def get_pending_tickets():
             t for t in _pending_tickets.values()
             if t.get('status') == 'pending'
             and t.get('regime_gate', {}).get('passed', True)
+            and t.get('risk_gate', {}).get('passed', True)
         ]
         return jsonify({'success': True, 'tickets': pending})
     except Exception as e:
