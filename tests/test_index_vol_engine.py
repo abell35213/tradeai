@@ -179,7 +179,7 @@ class TestGateEvaluation:
     def test_favorable_passes(self):
         components = self.engine._score_components(MOCK_VOL_DATA, MOCK_REGIME_FAVORABLE)
         edge = self.engine._composite_edge(components)
-        trade_gate = {'allowed': True, 'reasons': []}
+        trade_gate = {'pass_trade': True, 'reasons': []}
         gate = self.engine._evaluate_gate(edge, trade_gate, components)
         assert gate['passed'] is True
         assert gate['reasons'] == []
@@ -187,7 +187,7 @@ class TestGateEvaluation:
     def test_stressed_fails(self):
         components = self.engine._score_components(MOCK_VOL_DATA, MOCK_REGIME_STRESSED)
         edge = self.engine._composite_edge(components)
-        trade_gate = {'allowed': False, 'reasons': ['Volatility regime is stressed']}
+        trade_gate = {'pass_trade': False, 'reasons': ['Volatility regime is stressed']}
         gate = self.engine._evaluate_gate(edge, trade_gate, components)
         assert gate['passed'] is False
         assert len(gate['reasons']) > 0
@@ -201,7 +201,7 @@ class TestGateEvaluation:
             'event_proximity': 0.75,
         }
         edge = self.engine._composite_edge(components)
-        trade_gate = {'allowed': True, 'reasons': []}
+        trade_gate = {'pass_trade': True, 'reasons': []}
         gate = self.engine._evaluate_gate(edge, trade_gate, components)
         assert gate['passed'] is False
         assert any('Edge score' in r for r in gate['reasons'])

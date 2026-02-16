@@ -356,7 +356,7 @@ class IndexVolEngine:
     def _evaluate_gate(self, edge_score, trade_gate, components):
         """Determine pass/fail with reasons."""
         reasons = list(trade_gate.get('reasons', []))
-        passed = trade_gate.get('allowed', True)
+        passed = trade_gate.get('pass_trade', True)
 
         if edge_score < self.EDGE_PASS_THRESHOLD:
             passed = False

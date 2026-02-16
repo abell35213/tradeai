@@ -700,6 +700,7 @@ def get_pending_tickets():
         pending = [
             t for t in _pending_tickets.values()
             if t.get('status') == 'pending'
+            and t.get('regime_gate', {}).get('passed', True)
         ]
         return jsonify({'success': True, 'tickets': pending})
     except Exception as e:
