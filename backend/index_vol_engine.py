@@ -19,7 +19,7 @@ credit spread strategies.
 import logging
 import math
 import uuid
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 import yfinance as yf
 
@@ -197,6 +197,310 @@ class IndexVolEngine:
             status='pending',
         )
         return ticket
+
+    # ------------------------------------------------------------------
+    # Iron Condor ticket generation
+    # ------------------------------------------------------------------
+
+    # Configurable defaults for the iron condor strategy
+    IC_DTE_MIN = 7
+    IC_DTE_MAX = 10
+    IC_IMPLIED_MOVE_MULT = 1.2
+    IC_WING_WIDTH = 5.0
+    IC_MIN_CREDIT_PCT = 0.25
+    IC_TAKE_PROFIT_PCT = 65.0
+    IC_STOP_LOSS_MULTIPLE = 2.0
+    IC_TIME_STOP_DTE = 2
+
+    def generate_iron_condor_tickets(
+        self,
+        symbol="SPY",
+        wing_width=None,
+        min_credit_pct=None,
+        dte_range=None,
+        implied_move_mult=None,
+        existing_positions=None,
+    ):
+        """
+        Generate 0–N defined-risk Iron Condor trade tickets for *symbol*.
+
+        Parameters
+        ----------
+        symbol : str
+            Underlying ticker (default ``'SPY'``).
+        wing_width : float or None
+            Fixed wing width in dollars (default ``IC_WING_WIDTH``).
+        min_credit_pct : float or None
+            Minimum credit as a fraction of total width
+            (default ``IC_MIN_CREDIT_PCT``).
+        dte_range : tuple[int, int] or None
+            ``(min_dte, max_dte)`` inclusive (default ``(IC_DTE_MIN, IC_DTE_MAX)``).
+        implied_move_mult : float or None
+            Multiplier applied to implied move for short strike placement
+            (default ``IC_IMPLIED_MOVE_MULT``).
+        existing_positions : list or None
+            Current portfolio positions for risk evaluation.
+
+        Returns
+        -------
+        list[TradeTicket]
+            Zero or more trade tickets, each containing strikes, credit,
+            max loss, and exit rules.
+        """
+        wing_width = wing_width if wing_width is not None else self.IC_WING_WIDTH
+        min_credit_pct = (
+            min_credit_pct if min_credit_pct is not None else self.IC_MIN_CREDIT_PCT
+        )
+        dte_min, dte_max = dte_range or (self.IC_DTE_MIN, self.IC_DTE_MAX)
+        implied_move_mult = (
+            implied_move_mult if implied_move_mult is not None else self.IC_IMPLIED_MOVE_MULT
+        )
+        existing_positions = existing_positions or []
+
+        tickets = []
+
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            current_price = info.get("currentPrice") or info.get(
+                "regularMarketPrice"
+            )
+            expirations = ticker.options  # list of date strings
+
+            if not current_price or not expirations:
+                logger.warning(
+                    "No price or option data for %s — returning 0 tickets", symbol
+                )
+                return tickets
+
+            today = date.today()
+
+            for exp_str in expirations:
+                exp_date = datetime.strptime(exp_str, "%Y-%m-%d").date()
+                dte = (exp_date - today).days
+
+                if dte < dte_min or dte > dte_max:
+                    continue
+
+                ticket = self._build_iron_condor_ticket(
+                    ticker=ticker,
+                    symbol=symbol,
+                    current_price=current_price,
+                    expiry=exp_str,
+                    dte=dte,
+                    wing_width=wing_width,
+                    min_credit_pct=min_credit_pct,
+                    implied_move_mult=implied_move_mult,
+                    existing_positions=existing_positions,
+                )
+                if ticket is not None:
+                    tickets.append(ticket)
+
+        except Exception:
+            logger.exception(
+                "Failed to generate iron condor tickets for %s", symbol
+            )
+
+        return tickets
+
+    # ------------------------------------------------------------------
+    # Iron Condor construction helpers
+    # ------------------------------------------------------------------
+
+    def _build_iron_condor_ticket(
+        self,
+        ticker,
+        symbol,
+        current_price,
+        expiry,
+        dte,
+        wing_width,
+        min_credit_pct,
+        implied_move_mult,
+        existing_positions,
+    ):
+        """Build a single iron condor ticket for one expiration.
+
+        Returns a ``TradeTicket`` if the credit threshold is met, else
+        ``None``.
+        """
+        try:
+            chain = ticker.option_chain(expiry)
+            puts = chain.puts
+            calls = chain.calls
+        except Exception:
+            logger.debug("Could not load chain for %s %s", symbol, expiry)
+            return None
+
+        if puts.empty or calls.empty:
+            return None
+
+        # --- Implied move heuristic: ATM straddle mid / price -----------
+        implied_move_dollar = self._estimate_implied_move(
+            puts, calls, current_price
+        )
+        if implied_move_dollar is None or implied_move_dollar <= 0:
+            return None
+
+        strike_offset = implied_move_dollar * implied_move_mult
+
+        # --- Short / long strikes ---------------------------------------
+        short_put_target = current_price - strike_offset
+        short_call_target = current_price + strike_offset
+
+        short_put_strike, short_put_idx = self._nearest_strike(
+            puts, short_put_target
+        )
+        short_call_strike, short_call_idx = self._nearest_strike(
+            calls, short_call_target
+        )
+        if short_put_strike is None or short_call_strike is None:
+            return None
+
+        long_put_strike = short_put_strike - wing_width
+        long_call_strike = short_call_strike + wing_width
+
+        # Snap long strikes to nearest available
+        long_put_strike, long_put_idx = self._nearest_strike(
+            puts, long_put_strike
+        )
+        long_call_strike, long_call_idx = self._nearest_strike(
+            calls, long_call_strike
+        )
+        if long_put_strike is None or long_call_strike is None:
+            return None
+
+        # Effective widths (may differ slightly from target due to snapping)
+        put_width = round(short_put_strike - long_put_strike, 2)
+        call_width = round(long_call_strike - short_call_strike, 2)
+
+        if put_width <= 0 or call_width <= 0:
+            return None
+
+        # --- Credit calculation -----------------------------------------
+        put_credit = self._spread_credit(
+            puts, short_put_idx, puts, long_put_idx
+        )
+        call_credit = self._spread_credit(
+            calls, short_call_idx, calls, long_call_idx
+        )
+        total_credit = round(put_credit + call_credit, 2)
+
+        # Total width is the wider side (max risk is one side minus credit)
+        total_width = max(put_width, call_width)
+        max_loss = round((total_width - total_credit) * 100, 2)
+
+        # --- Credit threshold gate --------------------------------------
+        if total_width <= 0 or total_credit / total_width < min_credit_pct:
+            return None
+
+        # --- POP estimate (approx: breakeven at credit collection) ------
+        if total_credit > 0 and total_width > 0:
+            pop_estimate = round(
+                (1.0 - total_credit / total_width) * 100, 1
+            )
+            pop_estimate = max(0.0, min(100.0, pop_estimate))
+        else:
+            pop_estimate = None
+
+        # --- Build legs -------------------------------------------------
+        legs = [
+            TicketLeg(type="put", side="buy", strike=long_put_strike, qty=1),
+            TicketLeg(
+                type="put", side="sell", strike=short_put_strike, qty=1
+            ),
+            TicketLeg(
+                type="call", side="sell", strike=short_call_strike, qty=1
+            ),
+            TicketLeg(
+                type="call", side="buy", strike=long_call_strike, qty=1
+            ),
+        ]
+
+        # --- Exit rules -------------------------------------------------
+        exits = Exits(
+            take_profit_pct=self.IC_TAKE_PROFIT_PCT,
+            stop_loss_multiple=self.IC_STOP_LOSS_MULTIPLE,
+            time_stop_days=self.IC_TIME_STOP_DTE,
+        )
+
+        # --- Ticket -----------------------------------------------------
+        ticket = TradeTicket(
+            ticket_id=str(uuid.uuid4()),
+            underlying=symbol,
+            strategy="defined-risk iron condor",
+            expiry=expiry,
+            dte=dte,
+            legs=legs,
+            width=total_width,
+            mid_credit=total_credit,
+            limit_credit=total_credit,
+            max_loss=max_loss,
+            pop_estimate=pop_estimate,
+            edge_metrics=EdgeMetrics(),
+            regime_gate=RegimeGate(),
+            risk_gate=RiskGate(),
+            confidence_score=0.0,
+            exits=exits,
+            status="pending",
+        )
+        return ticket
+
+    @staticmethod
+    def _estimate_implied_move(puts, calls, current_price):
+        """Return estimated implied move in dollars from ATM straddle mid.
+
+        Uses the ATM put and call mid-prices as a simple heuristic.
+        """
+        try:
+            if puts.empty or calls.empty:
+                logger.debug("Empty option data for implied move estimation")
+                return None
+
+            atm_put_idx = (puts["strike"] - current_price).abs().idxmin()
+            atm_call_idx = (calls["strike"] - current_price).abs().idxmin()
+
+            put_row = puts.loc[atm_put_idx]
+            call_row = calls.loc[atm_call_idx]
+
+            put_mid = (put_row["bid"] + put_row["ask"]) / 2.0
+            call_mid = (call_row["bid"] + call_row["ask"]) / 2.0
+
+            straddle_mid = put_mid + call_mid
+            if straddle_mid <= 0:
+                logger.debug("Straddle mid <= 0, cannot estimate implied move")
+                return None
+            return float(straddle_mid)
+        except Exception:
+            logger.debug("Exception estimating implied move", exc_info=True)
+            return None
+
+    @staticmethod
+    def _nearest_strike(option_df, target):
+        """Find the strike in *option_df* closest to *target*.
+
+        Returns ``(strike, index)`` or ``(None, None)`` when the frame
+        is empty.
+        """
+        if option_df.empty:
+            return None, None
+        idx = (option_df["strike"] - target).abs().idxmin()
+        return float(option_df.loc[idx, "strike"]), idx
+
+    @staticmethod
+    def _spread_credit(sell_df, sell_idx, buy_df, buy_idx):
+        """Compute the net credit of selling one option and buying another.
+
+        Uses bid for the sold leg and ask for the bought leg. Returns 0
+        when data is missing or the result is negative.
+        """
+        try:
+            sell_bid = float(sell_df.loc[sell_idx, "bid"])
+            buy_ask = float(buy_df.loc[buy_idx, "ask"])
+            credit = sell_bid - buy_ask
+            return max(credit, 0.0)
+        except Exception:
+            return 0.0
 
     # ------------------------------------------------------------------
     # Component scoring
