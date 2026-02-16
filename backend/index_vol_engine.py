@@ -394,7 +394,7 @@ class IndexVolEngine:
         if total_width <= 0 or total_credit / total_width < min_credit_pct:
             return None
 
-        # --- POP estimate -----------------------------------------------
+        # --- POP estimate (approx: breakeven at credit collection) ------
         if total_credit > 0 and total_width > 0:
             pop_estimate = round(
                 (1.0 - total_credit / total_width) * 100, 1
@@ -453,6 +453,10 @@ class IndexVolEngine:
         Uses the ATM put and call mid-prices as a simple heuristic.
         """
         try:
+            if puts.empty or calls.empty:
+                logger.debug("Empty option data for implied move estimation")
+                return None
+
             atm_put_idx = (puts["strike"] - current_price).abs().idxmin()
             atm_call_idx = (calls["strike"] - current_price).abs().idxmin()
 
@@ -464,9 +468,11 @@ class IndexVolEngine:
 
             straddle_mid = put_mid + call_mid
             if straddle_mid <= 0:
+                logger.debug("Straddle mid <= 0, cannot estimate implied move")
                 return None
             return float(straddle_mid)
         except Exception:
+            logger.debug("Exception estimating implied move", exc_info=True)
             return None
 
     @staticmethod

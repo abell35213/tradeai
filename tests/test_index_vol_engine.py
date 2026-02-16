@@ -5,7 +5,11 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 import pytest
+import pandas as pd
+from datetime import date, timedelta
+from unittest.mock import patch, MagicMock
 from index_vol_engine import IndexVolEngine
+from trade_ticket import TradeTicket, Exits
 
 
 # ------------------------------------------------------------------
@@ -263,10 +267,6 @@ class TestBuildSpreadParams:
 # Iron Condor ticket generation tests
 # ------------------------------------------------------------------
 
-import pandas as pd
-from unittest.mock import patch, MagicMock
-from trade_ticket import TradeTicket, Exits
-
 
 def _make_option_df(strikes, bids, asks):
     """Create a minimal option-chain DataFrame for testing."""
@@ -312,6 +312,7 @@ class TestIronCondorTickets:
         df = _make_option_df([490, 495, 500, 505, 510], [0]*5, [0]*5)
         strike, idx = IndexVolEngine._nearest_strike(df, 497)
         assert strike == 495.0
+        assert df.loc[idx, 'strike'] == 495.0
 
     def test_nearest_strike_empty(self):
         empty = pd.DataFrame(columns=['strike', 'bid', 'ask'])
@@ -552,7 +553,6 @@ class TestIronCondorTickets:
     @patch('index_vol_engine.yf')
     def test_dte_filtering(self, mock_yf):
         """Only expirations in 7-10 DTE range are considered."""
-        from datetime import date, timedelta
         today = date.today()
         in_range = (today + timedelta(days=8)).strftime('%Y-%m-%d')
         out_range = (today + timedelta(days=30)).strftime('%Y-%m-%d')
