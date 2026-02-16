@@ -345,7 +345,7 @@ function TradeTickets({ apiUrl }) {
         </div>
 
         <button className="btn" onClick={generateTicket} disabled={generating}>
-          {generating ? 'Generating...' : 'Generate Trade Ticket'}
+          {generating ? 'Generating…' : 'Generate Trade Ticket'}
         </button>
       </div>
 

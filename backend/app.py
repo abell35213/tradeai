@@ -43,7 +43,11 @@ from validation import (
     IndexVolTicketRequest, ExecuteRequest, TradeApproveRequest,
     TradeRejectRequest,
 )
-from db import init_db, insert_ticket, approve_ticket as db_approve, reject_ticket as db_reject, list_pending_tickets as db_list_pending, get_ticket as db_get_ticket, get_audit_log
+from db import (
+    init_db, insert_ticket, approve_ticket as db_approve,
+    reject_ticket as db_reject, list_pending_tickets as db_list_pending,
+    get_ticket as db_get_ticket, get_audit_log,
+)
 from pydantic import ValidationError
 import os
 import json

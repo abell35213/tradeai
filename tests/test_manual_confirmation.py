@@ -38,10 +38,11 @@ def clear_state():
     _execution_log.clear()
     # Re-initialise the default SQLite database so API tests are isolated
     from db import init_db, _DB_PATH, _get_connection
+    _ALLOWED_TABLES = {'tickets', 'approvals', 'rejections', 'fills', 'daily_pnl'}
     conn = _get_connection()
     try:
-        for table in ('tickets', 'approvals', 'rejections', 'fills', 'daily_pnl'):
-            conn.execute(f"DELETE FROM {table}")
+        for table in _ALLOWED_TABLES:
+            conn.execute(f"DELETE FROM [{table}]")
         conn.commit()
     finally:
         conn.close()
