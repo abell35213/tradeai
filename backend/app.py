@@ -40,10 +40,17 @@ from demo_data import (
 from validation import (
     GreeksRequest, TradeTicketRequest, PositionSizeRequest,
     CircuitBreakerRequest, OpportunitiesRequest, PortfolioRiskRequest,
-    IndexVolTicketRequest, ExecuteRequest,
+    IndexVolTicketRequest, ExecuteRequest, TradeApproveRequest,
+    TradeRejectRequest,
+)
+from db import (
+    init_db, insert_ticket, approve_ticket as db_approve,
+    reject_ticket as db_reject, list_pending_tickets as db_list_pending,
+    get_ticket as db_get_ticket, get_audit_log,
 )
 from pydantic import ValidationError
 import os
+import json
 import uuid
 
 app = Flask(__name__)
@@ -79,6 +86,9 @@ index_vol_engine = IndexVolEngine(
 _pending_tickets = {}
 # In-memory log of approved / rejected tickets
 _execution_log = []
+
+# Initialise SQLite database for the manual-confirmation workflow
+init_db()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -766,6 +776,187 @@ def execute_trade():
         return jsonify({'success': True, 'ticket': ticket})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ------------------------------------------------------------------
+# Manual Confirmation workflow
+# ------------------------------------------------------------------
+
+@app.route('/api/trade-tickets/spy', methods=['POST'])
+def propose_spy_tickets():
+    """Generate proposed trade tickets for SPY and persist them in SQLite.
+
+    This is the entry-point for the semi-automated manual-confirmation
+    workflow.  It leverages the existing index-vol engine (or demo data)
+    to build a ticket, stores it in the ``tickets`` table, and returns
+    it for human review.
+    """
+    try:
+        data = request.json or {}
+        symbol = 'SPY'
+
+        # Re-use existing index-vol ticket generation logic
+        existing = data.get('existing_positions', [])
+        equity = data.get('equity', 100_000.0)
+        weekly_realized_pnl = data.get('weekly_realized_pnl', 0.0)
+        existing_weekly_max_losses = data.get('existing_weekly_max_losses', 0.0)
+
+        if DEMO_MODE:
+            from index_vol_engine import IndexVolEngine as _IVE
+            vol_surface_data = get_mock_vol_surface(symbol)
+            regime_data = get_mock_regime()
+            trade_gate = regime_classifier.should_trade(regime_data)
+            engine = _IVE(risk_engine=risk_engine)
+            components = engine._score_components(vol_surface_data, regime_data)
+            edge_score = engine._composite_edge(components)
+            pass_fail = engine._evaluate_gate(edge_score, trade_gate, components)
+
+            risk_result = risk_engine.evaluate_ticket_risk(
+                ticket_max_loss=375.0,
+                ticket_position={
+                    'symbol': symbol, 'delta': -0.30, 'vega': -0.10,
+                    'gamma': -0.01, 'notional': 500,
+                    'earnings_date': None, 'expiry_bucket': '7-30d',
+                },
+                existing_positions=existing,
+                equity=equity,
+                weekly_realized_pnl=weekly_realized_pnl,
+                existing_weekly_max_losses=existing_weekly_max_losses,
+            )
+            ticket = TradeTicket(
+                ticket_id=str(uuid.uuid4()),
+                underlying=symbol,
+                strategy='SPY_PUT_CREDIT_SPREAD',
+                expiry='2026-03-20',
+                dte=33,
+                legs=[
+                    TicketLeg(type='put', side='sell', strike=470.0, qty=1),
+                    TicketLeg(type='put', side='buy', strike=465.0, qty=1),
+                ],
+                width=5.0,
+                mid_credit=1.25,
+                limit_credit=1.20,
+                max_loss=375.0,
+                pop_estimate=75.0,
+                edge_metrics=EdgeMetrics(
+                    iv_pct=components.get('iv_rv_spread'),
+                    skew_metric=components.get('skew_dislocation'),
+                    term_structure=components.get('term_structure'),
+                ),
+                regime_gate=RegimeGate(
+                    passed=pass_fail.get('passed', True),
+                    reasons=pass_fail.get('reasons', []),
+                ),
+                risk_gate=RiskGate(
+                    passed=risk_result.get('risk_limits_pass', True),
+                    reasons=risk_result.get('reasons', []),
+                    portfolio_after=PortfolioAfter(
+                        delta=risk_result.get('portfolio_delta_after', 0.0),
+                        vega=risk_result.get('portfolio_vega_after', 0.0),
+                        gamma=risk_result.get('portfolio_gamma_after', 0.0),
+                        max_loss_trade=risk_result.get('max_loss_trade', 375.0),
+                        max_loss_week=risk_result.get('max_loss_week', 375.0),
+                    ),
+                ),
+                confidence_score=round(edge_score, 4),
+                exits=Exits(),
+                status='pending',
+            )
+        else:
+            ticket = index_vol_engine.generate_trade_ticket(symbol, existing)
+
+        ticket_dict = ticket.model_dump()
+        # Also keep in memory for backward compat with existing /api/execute
+        _pending_tickets[ticket_dict['ticket_id']] = ticket_dict
+        # Persist to SQLite
+        ticket_id, ticket_hash = insert_ticket(ticket_dict)
+        ticket_dict['ticket_hash'] = ticket_hash
+
+        return jsonify({'success': True, 'tickets': [ticket_dict]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trade-approve', methods=['POST'])
+def trade_approve():
+    """Approve a pending trade ticket.
+
+    Stores the approval in SQLite with a timestamp and the ticket hash
+    for idempotency.  No broker execution is performed.
+    """
+    try:
+        data = request.json or {}
+        try:
+            validated = TradeApproveRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
+
+        try:
+            record = db_approve(validated.ticket_id)
+        except KeyError:
+            return jsonify({
+                'success': False,
+                'error': f'Ticket {validated.ticket_id} not found',
+            }), 404
+        except ValueError as ve:
+            return jsonify({
+                'success': False,
+                'error': str(ve),
+            }), 409
+
+        # Keep in-memory store in sync
+        if validated.ticket_id in _pending_tickets:
+            _pending_tickets[validated.ticket_id]['status'] = 'approved'
+
+        return jsonify({'success': True, 'approval': record})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trade-reject', methods=['POST'])
+def trade_reject():
+    """Reject a pending trade ticket with an optional reason.
+
+    Stores the rejection in SQLite with a timestamp, ticket hash,
+    and the optional reason text.
+    """
+    try:
+        data = request.json or {}
+        try:
+            validated = TradeRejectRequest(**data)
+        except ValidationError as ve:
+            return jsonify({'success': False, 'error': ve.errors()}), 422
+
+        try:
+            record = db_reject(validated.ticket_id, reason=validated.reason)
+        except KeyError:
+            return jsonify({
+                'success': False,
+                'error': f'Ticket {validated.ticket_id} not found',
+            }), 404
+        except ValueError as ve:
+            return jsonify({
+                'success': False,
+                'error': str(ve),
+            }), 409
+
+        # Keep in-memory store in sync
+        if validated.ticket_id in _pending_tickets:
+            _pending_tickets[validated.ticket_id]['status'] = 'rejected'
+
+        return jsonify({'success': True, 'rejection': record})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trade-audit-log', methods=['GET'])
+def trade_audit_log():
+    """Return the full approval / rejection audit log."""
+    try:
+        log = get_audit_log()
+        return jsonify({'success': True, 'log': log})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     print("Starting Derivatives Trading Sentiment Tracker API...")
