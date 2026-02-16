@@ -64,6 +64,7 @@ class PortfolioAfter(BaseModel):
     delta: float = 0.0
     vega: float = 0.0
     gamma: float = 0.0
+    max_loss_trade: float = 0.0
     max_loss_week: float = 0.0
 
 
@@ -237,7 +238,9 @@ def build_trade_ticket(
 # Risk evaluation
 # ---------------------------------------------------------------------------
 
-def evaluate_ticket(ticket, risk_engine, existing_positions):
+def evaluate_ticket(ticket, risk_engine, existing_positions,
+                    equity=100_000.0, weekly_realized_pnl=0.0,
+                    existing_weekly_max_losses=0.0):
     """
     Ask the ``RiskEngine`` to compute portfolio risk **after** the proposed
     trade is added, and populate the ticket's ``risk_gate``.
@@ -251,6 +254,12 @@ def evaluate_ticket(ticket, risk_engine, existing_positions):
     existing_positions : list[dict]
         Current portfolio positions (same schema accepted by
         ``risk_engine.calculate_portfolio_risk``).
+    equity : float
+        Total account equity (default 100 000).
+    weekly_realized_pnl : float
+        Realized P&L this week (negative means loss).
+    existing_weekly_max_losses : float
+        Sum of max-loss values for trades already opened this week.
 
     Returns
     -------
@@ -279,21 +288,26 @@ def evaluate_ticket(ticket, risk_engine, existing_positions):
         'expiry_bucket': None,
     }
 
-    all_positions = list(existing_positions) + [new_position]
-    risk_after = risk_engine.calculate_portfolio_risk(all_positions)
+    result = risk_engine.evaluate_ticket_risk(
+        ticket_max_loss=ticket.max_loss,
+        ticket_position=new_position,
+        existing_positions=existing_positions,
+        equity=equity,
+        weekly_realized_pnl=weekly_realized_pnl,
+        existing_weekly_max_losses=existing_weekly_max_losses,
+    )
 
-    reasons = []
-    passed = True
     portfolio_after = PortfolioAfter(
-        delta=risk_after.get('portfolio_delta', 0.0),
-        vega=risk_after.get('portfolio_vega', 0.0),
-        gamma=risk_after.get('portfolio_gamma', 0.0),
-        max_loss_week=ticket.max_loss,
+        delta=result.get('portfolio_delta_after', 0.0),
+        vega=result.get('portfolio_vega_after', 0.0),
+        gamma=result.get('portfolio_gamma_after', 0.0),
+        max_loss_trade=result.get('max_loss_trade', ticket.max_loss),
+        max_loss_week=result.get('max_loss_week', ticket.max_loss),
     )
 
     ticket.risk_gate = RiskGate(
-        passed=passed,
-        reasons=reasons,
+        passed=result.get('risk_limits_pass', True),
+        reasons=result.get('reasons', []),
         portfolio_after=portfolio_after,
     )
     return ticket

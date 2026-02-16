@@ -37,6 +37,9 @@ class TradeTicketRequest(BaseModel):
     width: float = 0.0
     expiry: Optional[str] = None
     existing_positions: Optional[list] = Field(default=[])
+    equity: float = Field(default=100_000.0, gt=0)
+    weekly_realized_pnl: float = Field(default=0.0)
+    existing_weekly_max_losses: float = Field(default=0.0, ge=0)
 
 
 class PositionSizeRequest(BaseModel):
@@ -73,6 +76,9 @@ class IndexVolTicketRequest(BaseModel):
     """Schema for POST /api/trade-ticket/index-vol."""
     symbol: str = Field(default='SPY', min_length=1, max_length=10)
     existing_positions: list = Field(default=[])
+    equity: float = Field(default=100_000.0, gt=0)
+    weekly_realized_pnl: float = Field(default=0.0)
+    existing_weekly_max_losses: float = Field(default=0.0, ge=0)
 
 
 class ExecuteRequest(BaseModel):
