@@ -302,7 +302,8 @@ def evaluate_ticket(ticket, risk_engine, existing_positions,
         vega=result.get('portfolio_vega_after', 0.0),
         gamma=result.get('portfolio_gamma_after', 0.0),
         max_loss_trade=result.get('max_loss_trade', ticket.max_loss),
-        max_loss_week=result.get('max_loss_week', ticket.max_loss),
+        max_loss_week=result.get('max_loss_week',
+                                 ticket.max_loss + existing_weekly_max_losses),
     )
 
     ticket.risk_gate = RiskGate(
