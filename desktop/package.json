@@ -1,1 +1,14 @@
+{
+  "name": "tradeai-desktop",
+  "version": "0.1.0",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "wait-on": "^7.2.0"
+  }
+}
 
