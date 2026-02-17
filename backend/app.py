@@ -957,14 +957,20 @@ def trade_audit_log():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 if __name__ == '__main__':
-    print("Starting Derivatives Trading Sentiment Tracker API...")
-    print("Available at: http://localhost:5000")
+    import os
+
+    port = int(os.environ.get('TRADEAI_PORT', '5055'))  # fixed for desktop mode
+    debug_mode = os.environ.get('DEBUG', 'false').lower() == 'true'
+
+    print("Starting TradeAI Local API...")
+    print(f"Available at: http://127.0.0.1:{port}")
     if DEMO_MODE:
         print("⚠️  DEMO MODE: Using mock data (no internet connection)")
-    
-    # Debug mode should be disabled in production
-    # Set DEBUG environment variable to 'true' for development
-    debug_mode = os.environ.get('DEBUG', 'false').lower() == 'true'
-    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
+
+    # Local-only bind for desktop safety (do NOT use 0.0.0.0)
+    app.run(debug=debug_mode, host='127.0.0.1', port=port)
