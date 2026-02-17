@@ -1,6 +1,7 @@
 {
   "name": "tradeai-frontend",
   "version": "1.0.0",
+  "homepage": "https://abell35213.github.io/tradeai",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
