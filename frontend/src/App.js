@@ -6,6 +6,8 @@ import GreeksCalculator from './components/GreeksCalculator';
 import RiskMetrics from './components/RiskMetrics';
 import EarningsPlaybook from './components/EarningsPlaybook';
 import TradeTickets from './components/TradeTickets';
+import PendingTicketsSPY from "./components/PendingTicketsSPY";
+
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
