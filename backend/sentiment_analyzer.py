@@ -15,6 +15,21 @@ import numpy as np
 from datetime import datetime, timedelta
 from textblob import TextBlob
 
+# Optional dependencies:
+# - yfinance is required for fetching market data in this module.
+# - textblob is optional (only needed if/when you add text/news sentiment).
+# These are wrapped so the app can run in lean environments without crashing
+# at import-time.
+try:
+    import yfinance as yf  # type: ignore
++except ImportError:
+    yf = None  # type: ignore
+
+try:
+    from textblob import TextBlob  # type: ignore
+except ImportError:
+    TextBlob = None  # type: ignore
+    
 logger = logging.getLogger(__name__)
 
 class SentimentAnalyzer:
@@ -34,6 +49,15 @@ class SentimentAnalyzer:
         - Overall sentiment score
         """
         try:
+            # Fail gracefully if yfinance isn't installed rather than crashing
+            # the whole desktop app.
+            if yf is None:
+                return {
+                    'error': "Required dependency 'yfinance' is not installed. Install it to enable sentiment analysis.",
+                    'overall_score': 0,
+                    'confidence': 0
+                }
+                
             ticker = yf.Ticker(symbol)
             history = ticker.history(period=self.lookback_period)
             
