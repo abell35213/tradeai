@@ -6,10 +6,10 @@ import GreeksCalculator from './components/GreeksCalculator';
 import RiskMetrics from './components/RiskMetrics';
 import EarningsPlaybook from './components/EarningsPlaybook';
 import TradeTickets from './components/TradeTickets';
-import PendingTicketsSPY from "./components/PendingTicketsSPY";
+import PendingTicketsSPY from "./components/PendingTicketsSpy";
 
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5055';
 
 function App() {
   const [activeTab, setActiveTab] = useState('sentiment');
@@ -58,6 +58,12 @@ function App() {
         >
           Trade Tickets
         </button>
+        <button 
+          className={`tab ${activeTab === 'spy' ? 'active' : ''}`}
+          onClick={() => setActiveTab('spy')}
+        >
+          SPY Tickets
+        </button>
       </div>
 
       <div className="main-content">
@@ -67,6 +73,7 @@ function App() {
         {activeTab === 'risk' && <RiskMetrics apiUrl={API_BASE_URL} />}
         {activeTab === 'earnings' && <EarningsPlaybook apiUrl={API_BASE_URL} />}
         {activeTab === 'tickets' && <TradeTickets apiUrl={API_BASE_URL} />}
+        {activeTab === 'spy' && <PendingTicketsSPY />}
       </div>
 
       <footer style={{ textAlign: 'center', color: 'white', marginTop: '40px', padding: '20px' }}>

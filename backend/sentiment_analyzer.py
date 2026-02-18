@@ -22,7 +22,7 @@ from textblob import TextBlob
 # at import-time.
 try:
     import yfinance as yf  # type: ignore
-+except ImportError:
+except ImportError:
     yf = None  # type: ignore
 
 try:
