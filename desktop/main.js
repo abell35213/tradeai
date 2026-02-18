@@ -11,6 +11,10 @@ const FRONTEND_DEV_URL = "http://localhost:3000";
 const BUILD_DIR = path.join(__dirname, "..", "frontend", "build");
 const IS_DEV = process.env.TRADEAI_DEV === "true" || !fs.existsSync(path.join(BUILD_DIR, "index.html"));
 
+if (IS_DEV && !process.env.TRADEAI_DEV) {
+  console.warn("Warning: No production build found at", BUILD_DIR, "— falling back to dev server.");
+}
+
 let backendProc = null;
 
 function startBackend() {
