@@ -22,6 +22,8 @@ from risk_engine import RiskEngine
 from position_sizer import PositionSizer
 from vol_surface_analyzer import VolSurfaceAnalyzer
 from market_data_provider import YFinanceDataProvider
+from etf_universe import get_etf_universe
+from etf_ranker import ETFRanker
 from circuit_breaker import CircuitBreaker
 from trade_ticket import (
     TradeTicket, TicketLeg, EdgeMetrics, RegimeGate,
@@ -71,6 +73,7 @@ risk_engine = RiskEngine()
 position_sizer = PositionSizer()
 vol_surface_analyzer = VolSurfaceAnalyzer()
 market_data_provider = YFinanceDataProvider()
+etf_ranker = ETFRanker()
 circuit_breaker = CircuitBreaker()
 earnings_backtester = EarningsBacktester()
 vol_decay_analyzer = VolDecayAnalyzer()
@@ -153,6 +156,33 @@ def get_market_data(symbol):
             'success': False,
             'error': str(e)
         }), 500
+        
+@app.route('/api/etf/opportunities', methods=['GET'])
+def get_etf_opportunities():
+    """
+    Return top ranked ETF opportunities (breakout-weighted) for directional sleeve.
+
+    Query params:
+      top (int): number of results, default 5
+      min_score (int): minimum score threshold, default 65
+    """
+    try:
+        top = request.args.get('top', 5, type=int)
+        min_score = request.args.get('min_score', 65, type=int)
+
+        symbols = get_etf_universe()
+        ranked = etf_ranker.rank(symbols, top=top, min_score=min_score)
+
+        return jsonify({
+            'success': True,
+            'timestamp': datetime.now().isoformat(),
+            'universe_size': len(symbols),
+            'top': top,
+            'min_score': min_score,
+            'ranked': ranked,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/options/<symbol>', methods=['GET'])
 def get_options(symbol):
