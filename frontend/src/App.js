@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ETFOpportunities from "./components/ETFOpportunities";
+import DirectionalTickets from "./components/DirectionalTickets";
 import './App.css';
 import SentimentAnalysis from './components/SentimentAnalysis';
 import OpportunityFinder from './components/OpportunityFinder';
@@ -7,6 +9,7 @@ import RiskMetrics from './components/RiskMetrics';
 import EarningsPlaybook from './components/EarningsPlaybook';
 import TradeTickets from './components/TradeTickets';
 import PendingTicketsSPY from "./components/PendingTicketsSpy";
+
 
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5055';
