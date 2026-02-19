@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import ETFOpportunities from "./components/ETFOpportunities";
-import DirectionalTickets from "./components/DirectionalTickets";
 import './App.css';
 import SentimentAnalysis from './components/SentimentAnalysis';
 import OpportunityFinder from './components/OpportunityFinder';
