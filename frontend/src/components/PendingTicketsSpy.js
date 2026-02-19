@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { apiGet, apiPost } from "../api/client";
-import "./PendingTicketsSPY.css";
+import "./PendingTicketsSpy.css";
 
 function formatLeg(leg) {
   // leg: { side: "SELL"/"BUY", type: "CALL"/"PUT", strike: number, qty: number }

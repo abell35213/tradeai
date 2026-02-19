@@ -6,7 +6,9 @@
   "scripts": {
     "start": "cd frontend && npm start",
     "build": "cd frontend && npm run build",
-    "server": "python backend/app.py"
+    "server": "python backend/app.py",
+    "desktop": "cd frontend && npm run build && cd ../desktop && npx electron .",
+    "desktop:dev": "cd desktop && TRADEAI_DEV=true npx electron ."
   },
   "keywords": ["trading", "derivatives", "sentiment", "ai"],
   "author": "",

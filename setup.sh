@@ -49,6 +49,19 @@ fi
 cd ..
 echo "✓ Frontend dependencies installed"
 
+# Install Desktop dependencies
+echo ""
+echo "Installing Desktop (Electron) dependencies..."
+cd ../desktop
+npm install
+
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to install desktop dependencies"
+    exit 1
+fi
+cd ..
+echo "✓ Desktop dependencies installed"
+
 echo ""
 echo "======================================"
 echo "✓ Setup Complete!"
@@ -56,13 +69,14 @@ echo "======================================"
 echo ""
 echo "To start the application:"
 echo ""
-echo "1. Start the backend (in one terminal):"
-echo "   python backend/app.py"
+echo "1. Start as desktop app (recommended):"
+echo "   npm run desktop"
 echo ""
-echo "2. Start the frontend (in another terminal):"
-echo "   cd frontend && npm start"
+echo "2. Or start in dev mode (two terminals):"
+echo "   Terminal 1: python backend/app.py"
+echo "   Terminal 2: cd frontend && npm start"
+echo "   Terminal 3: npm run desktop:dev"
 echo ""
 echo "The application will be available at:"
-echo "   Frontend: http://localhost:3000"
-echo "   Backend API: http://localhost:5000"
+echo "   Backend API: http://127.0.0.1:5055"
 echo ""
