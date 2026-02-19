@@ -16,6 +16,8 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5055';
 
 function App() {
   const [activeTab, setActiveTab] = useState('sentiment');
+  const [selectedETF, setSelectedETF] = useState(null);
+
 
   return (
     <div className="App">
@@ -67,17 +69,31 @@ function App() {
         >
           SPY Tickets
         </button>
-      </div>
+        <button
+          className={`tab ${activeTab === 'etf' ? 'active' : ''}`}
+          onClick={() => setActiveTab('etf')}
+        >
+          ETF Directional
+        </button>
+       </div>
 
-      <div className="main-content">
-        {activeTab === 'sentiment' && <SentimentAnalysis apiUrl={API_BASE_URL} />}
-        {activeTab === 'opportunities' && <OpportunityFinder apiUrl={API_BASE_URL} />}
-        {activeTab === 'greeks' && <GreeksCalculator apiUrl={API_BASE_URL} />}
-        {activeTab === 'risk' && <RiskMetrics apiUrl={API_BASE_URL} />}
-        {activeTab === 'earnings' && <EarningsPlaybook apiUrl={API_BASE_URL} />}
-        {activeTab === 'tickets' && <TradeTickets apiUrl={API_BASE_URL} />}
-        {activeTab === 'spy' && <PendingTicketsSPY />}
-      </div>
+    <div className="main-content">
+      {activeTab === 'sentiment' && <SentimentAnalysis apiUrl={API_BASE_URL} />}
+      {activeTab === 'opportunities' && <OpportunityFinder apiUrl={API_BASE_URL} />}
+      {activeTab === 'greeks' && <GreeksCalculator apiUrl={API_BASE_URL} />}
+      {activeTab === 'risk' && <RiskMetrics apiUrl={API_BASE_URL} />}
+      {activeTab === 'earnings' && <EarningsPlaybook apiUrl={API_BASE_URL} />}
+      {activeTab === 'tickets' && <TradeTickets apiUrl={API_BASE_URL} />}
+      {activeTab === 'spy' && <PendingTicketsSPY />}
+      {activeTab === 'etf' && (
+        <div>
+          <ETFOpportunities onSelect={setSelectedETF} />
+          <div style={{ height: 12 }} />
+          <DirectionalTickets selected={selectedETF} />
+        </div>
+      )}
+    </div>
+
 
       <footer style={{ textAlign: 'center', color: 'white', marginTop: '40px', padding: '20px' }}>
         <p><strong>Derivatives Trading - Key Metrics Tracked:</strong></p>
