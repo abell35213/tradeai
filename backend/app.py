@@ -177,7 +177,34 @@ def get_etf_opportunities():
         min_score = request.args.get('min_score', 65, type=int)
 
         symbols = get_etf_universe()
-        ranked = etf_ranker.rank(symbols, top=top, min_score=min_score)
+        
+        if DEMO_MODE:
+            # simple mock ranking so UI/dev flow works offline
+            ranked = []
+            demo_rows = [
+                ("SPY", "bullish", "breakout", 78),
+                ("QQQ", "bullish", "breakout", 74),
+                ("XLE", "bullish", "pullback", 68),
+                ("XLF", "bearish", "breakdown", 67),
+                ("IWM", "bearish", "pullback", 61),
+            ]
+            for sym, bias, signal_type, score in demo_rows:
+                if score < min_score:
+                    continue
+                ranked.append({
+                    "symbol": sym,
+                    "bias": bias,
+                    "signal_type": signal_type,
+                    "score": score,
+                    "strength_label": "eligible" if score >= 65 else "caution",
+                    "price": None,
+                    "levels": {"trigger": None, "stop": None},
+                    "components": {},
+                    "metrics": {},
+                })
+            ranked = ranked[:top]
+        else:
+            ranked = etf_ranker.rank(symbols, top=top, min_score=min_score)
 
         return jsonify({
             'success': True,
