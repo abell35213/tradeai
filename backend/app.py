@@ -12,6 +12,12 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import logging
+
+# Suppress yfinance + underlying noisy logs
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("requests").setLevel(logging.WARNING)
+
 import yfinance as yf
 from sentiment_analyzer import SentimentAnalyzer
 from derivatives_calculator import DerivativesCalculator
